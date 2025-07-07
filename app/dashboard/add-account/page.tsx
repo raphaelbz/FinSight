@@ -1,192 +1,290 @@
-"use client"
+'use client'
 
-import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { TrendingUp, ArrowLeft, Shield, ExternalLink } from "lucide-react"
-import Link from "next/link"
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
+import { Card } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+
+// Popular European banks supported by GoCardless
+const supportedBanks = [
+  {
+    id: 'revolut',
+    name: 'Revolut',
+    description: 'Digital bank populaire en Europe',
+    logo: '💳',
+    countries: ['GB', 'FR', 'DE', 'ES', 'IT'],
+    popular: true
+  },
+  {
+    id: 'hsbc',
+    name: 'HSBC',
+    description: 'Banque internationale',
+    logo: '🏦',
+    countries: ['GB'],
+    popular: true
+  },
+  {
+    id: 'santander',
+    name: 'Santander',
+    description: 'Banque européenne',
+    logo: '🏛️',
+    countries: ['GB', 'ES', 'DE', 'PT'],
+    popular: true
+  },
+  {
+    id: 'ing',
+    name: 'ING',
+    description: 'Banque en ligne',
+    logo: '🧡',
+    countries: ['NL', 'DE', 'FR', 'BE'],
+    popular: true
+  },
+  {
+    id: 'barclays',
+    name: 'Barclays',
+    description: 'Banque britannique',
+    logo: '🏦',
+    countries: ['GB'],
+    popular: false
+  },
+  {
+    id: 'lloyds',
+    name: 'Lloyds Bank',
+    description: 'Banque du Royaume-Uni',
+    logo: '🐎',
+    countries: ['GB'],
+    popular: false
+  }
+]
 
 export default function AddAccountPage() {
+  const searchParams = useSearchParams()
   const [isConnecting, setIsConnecting] = useState(false)
-  const router = useRouter()
+  const [selectedBank, setSelectedBank] = useState<string | null>(null)
+  const [message, setMessage] = useState<{ type: 'success' | 'error' | 'warning', text: string } | null>(null)
 
-  const handleConnectRevolut = async () => {
-    setIsConnecting(true)
+  useEffect(() => {
+    // Handle callback messages
+    const error = searchParams.get('error')
+    const success = searchParams.get('success')
+    const warning = searchParams.get('warning')
+    const messageText = searchParams.get('message')
+
+    if (success && messageText) {
+      setMessage({ type: 'success', text: decodeURIComponent(messageText) })
+    } else if (warning && messageText) {
+      setMessage({ type: 'warning', text: decodeURIComponent(messageText) })
+    } else if (error && messageText) {
+      setMessage({ type: 'error', text: decodeURIComponent(messageText) })
+    }
+  }, [searchParams])
+
+  const handleBankConnection = async (bankName: string) => {
+    if (isConnecting) return
     
+    setIsConnecting(true)
+    setSelectedBank(bankName)
+    setMessage(null)
+
     try {
-      // Redirect to Revolut OAuth flow
-      window.location.href = '/api/revolut/auth'
+      const response = await fetch('/api/gocardless/auth', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ bankName })
+      })
+
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        // Redirect to bank authorization
+        window.location.href = data.authUrl
+      } else {
+        setMessage({ 
+          type: 'error', 
+          text: data.message || 'Échec de la connexion à la banque'
+        })
+      }
     } catch (error) {
-      console.error('Error connecting to Revolut:', error)
+      console.error('Bank connection error:', error)
+      setMessage({ 
+        type: 'error', 
+        text: 'Erreur de connexion. Veuillez réessayer.'
+      })
+    } finally {
       setIsConnecting(false)
+      setSelectedBank(null)
     }
   }
 
-  const handleBack = () => {
-    router.push('/dashboard')
-  }
+  const popularBanks = supportedBanks.filter(bank => bank.popular)
+  const otherBanks = supportedBanks.filter(bank => !bank.popular)
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200">
-        <div className="max-w-4xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <Button 
-              variant="ghost" 
-              onClick={handleBack}
-              className="flex items-center space-x-2"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              <span>Retour au dashboard</span>
-            </Button>
-            <div className="flex items-center space-x-3">
-              <div className="flex items-center justify-center w-8 h-8 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg">
-                <TrendingUp className="h-5 w-5 text-white" />
+    <div className="container mx-auto px-4 py-8 max-w-4xl">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">
+          Connecter votre banque
+        </h1>
+        <p className="text-gray-600 text-lg">
+          Connectez votre compte bancaire pour synchroniser automatiquement vos transactions et analyser vos finances.
+        </p>
+      </div>
+
+      {/* Message display */}
+      {message && (
+        <div className={`mb-6 p-4 rounded-lg border ${
+          message.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' :
+          message.type === 'warning' ? 'bg-yellow-50 border-yellow-200 text-yellow-800' :
+          'bg-red-50 border-red-200 text-red-800'
+        }`}>
+          <p className="font-medium">{message.text}</p>
+        </div>
+      )}
+
+      {/* Popular Banks */}
+      <div className="mb-8">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+          <span className="mr-2">⭐</span>
+          Banques populaires
+        </h2>
+        <div className="grid gap-4 md:grid-cols-2">
+          {popularBanks.map((bank) => (
+            <Card key={bank.id} className="p-6 hover:shadow-lg transition-shadow">
+              <div className="flex items-start space-x-4">
+                <div className="text-3xl">{bank.logo}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center space-x-2 mb-2">
+                    <h3 className="text-lg font-semibold text-gray-900">{bank.name}</h3>
+                    {bank.id === 'revolut' && (
+                      <Badge variant="default" className="bg-blue-100 text-blue-800">
+                        Recommandé
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-gray-600 text-sm mb-3">{bank.description}</p>
+                  <div className="flex flex-wrap gap-1 mb-4">
+                    {bank.countries.map(country => (
+                      <Badge key={country} variant="secondary" className="text-xs">
+                        {country}
+                      </Badge>
+                    ))}
+                  </div>
+                  <Button
+                    onClick={() => handleBankConnection(bank.id)}
+                    disabled={isConnecting}
+                    className="w-full"
+                    variant={bank.id === 'revolut' ? 'default' : 'outline'}
+                  >
+                    {isConnecting && selectedBank === bank.id ? (
+                      <>
+                        <span className="mr-2">⏳</span>
+                        Connexion en cours...
+                      </>
+                    ) : (
+                      <>
+                        <span className="mr-2">🔗</span>
+                        Connecter {bank.name}
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
-              <h1 className="text-xl font-bold text-gray-900">FinSight</h1>
-            </div>
+            </Card>
+          ))}
+        </div>
+      </div>
+
+      {/* Other Banks */}
+      <div className="mb-8">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+          <span className="mr-2">🏦</span>
+          Autres banques
+        </h2>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {otherBanks.map((bank) => (
+            <Card key={bank.id} className="p-4 hover:shadow-md transition-shadow">
+              <div className="flex items-center space-x-3 mb-3">
+                <div className="text-2xl">{bank.logo}</div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-medium text-gray-900">{bank.name}</h3>
+                  <p className="text-gray-500 text-xs">{bank.description}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-1 mb-3">
+                {bank.countries.map(country => (
+                  <Badge key={country} variant="secondary" className="text-xs">
+                    {country}
+                  </Badge>
+                ))}
+              </div>
+              <Button
+                onClick={() => handleBankConnection(bank.id)}
+                disabled={isConnecting}
+                variant="outline"
+                size="sm"
+                className="w-full"
+              >
+                {isConnecting && selectedBank === bank.id ? (
+                  <>⏳ Connexion...</>
+                ) : (
+                  <>🔗 Connecter</>
+                )}
+              </Button>
+            </Card>
+          ))}
+        </div>
+      </div>
+
+      {/* Information Section */}
+      <Card className="p-6 bg-blue-50 border-blue-200">
+        <h3 className="text-lg font-semibold text-blue-900 mb-3 flex items-center">
+          <span className="mr-2">ℹ️</span>
+          Comment ça fonctionne
+        </h3>
+        <div className="space-y-3 text-blue-800">
+          <div className="flex items-start space-x-3">
+            <span className="font-bold text-blue-600">1.</span>
+            <p className="text-sm">
+              <strong>Sélectionnez votre banque</strong> - Choisissez votre banque dans la liste ci-dessus
+            </p>
+          </div>
+          <div className="flex items-start space-x-3">
+            <span className="font-bold text-blue-600">2.</span>
+            <p className="text-sm">
+              <strong>Autorisation sécurisée</strong> - Vous serez redirigé vers votre banque pour autoriser la connexion
+            </p>
+          </div>
+          <div className="flex items-start space-x-3">
+            <span className="font-bold text-blue-600">3.</span>
+            <p className="text-sm">
+              <strong>Synchronisation automatique</strong> - Vos transactions seront synchronisées en temps réel
+            </p>
           </div>
         </div>
-      </header>
-
-      {/* Main content */}
-      <main className="max-w-4xl mx-auto px-6 py-12">
-        <div className="text-center mb-8">
-          <h2 className="text-3xl font-bold text-gray-900 mb-4">
-            Connecter votre banque
-          </h2>
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            Connectez votre compte Revolut pour synchroniser automatiquement vos transactions et analyser vos finances.
+        <div className="mt-4 p-3 bg-white rounded border border-blue-200">
+          <p className="text-xs text-blue-700">
+            <strong>🔒 Sécurité :</strong> Nous utilisons l'Open Banking européen (PSD2) pour accéder à vos données bancaires de manière sécurisée. 
+            Nous ne stockons jamais vos identifiants bancaires et n'avons accès qu'aux données que vous autorisez.
           </p>
         </div>
+      </Card>
 
-        {/* Revolut card */}
-        <div className="max-w-md mx-auto mb-8">
-          <Card className="p-6 border border-orange-200 bg-orange-50">
-            <div className="flex items-start space-x-4">
-              <div className="p-3 bg-orange-100 rounded-lg flex-shrink-0">
-                <svg className="h-8 w-8 text-orange-600" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                </svg>
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center space-x-2 mb-2">
-                  <h3 className="text-lg font-semibold text-gray-900">Revolut</h3>
-                  <Badge variant="secondary" className="bg-orange-100 text-orange-800 border-orange-200">
-                    BETA
-                  </Badge>
-                  <Badge variant="outline" className="bg-yellow-50 text-yellow-800 border-yellow-200">
-                    CERTIFICATS REQUIS
-                  </Badge>
-                </div>
-                <p className="text-gray-600 text-sm mb-4">
-                  Connectez votre compte Revolut pour voir vos transactions et soldes en temps réel. 
-                  <strong>Nécessite des certificats Open Banking OBIE/eIDAS.</strong>
-                </p>
-                
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
-                  <div className="flex items-start space-x-2">
-                    <div className="flex-shrink-0">
-                      <svg className="h-5 w-5 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                    <div className="text-sm text-yellow-800">
-                      <p className="font-medium">Configuration requise :</p>
-                      <ul className="mt-1 list-disc list-inside space-y-1">
-                        <li>Certificats OBIE (UK) ou eIDAS (EU)</li>
-                        <li>Statut de Third Party Provider régulé</li>
-                        <li>Configuration avancée des certificats SSL</li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  disabled
-                  className="w-full bg-gray-300 text-gray-500 px-4 py-2 rounded-lg font-medium cursor-not-allowed"
-                >
-                  Configuration de certificats requise
-                </button>
-                
-                <div className="mt-3 text-xs text-gray-500">
-                  Pour utiliser cette fonctionnalité, consultez la documentation Revolut Open Banking.
-                </div>
-              </div>
-            </div>
-          </Card>
-        </div>
-
-        {/* Real integration info */}
-        <div className="max-w-2xl mx-auto bg-blue-50 border border-blue-200 rounded-xl p-6 mb-8">
-          <div className="flex items-start space-x-4">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <TrendingUp className="h-5 w-5 text-blue-600" />
-            </div>
-            <div>
-              <h4 className="font-semibold text-blue-900 mb-2">Intégration réelle</h4>
-              <p className="text-blue-800 text-sm leading-relaxed mb-3">
-                Cette fonctionnalité utilise l'API Open Banking officielle de Revolut pour une connexion sécurisée 
-                et authentique à votre compte bancaire.
-              </p>
-              <div className="text-blue-700 text-xs space-y-1">
-                <p>• Authentification OAuth2 officielle</p>
-                <p>• Conformité PSD2 et Open Banking</p>
-                <p>• Données chiffrées de bout en bout</p>
-                <p>• Accès en lecture seule</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Requirements */}
-        <div className="max-w-2xl mx-auto bg-amber-50 border border-amber-200 rounded-xl p-6 mb-8">
-          <div className="flex items-start space-x-4">
-            <div className="p-2 bg-amber-100 rounded-lg">
-              <Shield className="h-5 w-5 text-amber-600" />
-            </div>
-            <div>
-              <h4 className="font-semibold text-amber-900 mb-2">Configuration requise</h4>
-              <p className="text-amber-800 text-sm leading-relaxed mb-3">
-                Pour utiliser cette fonctionnalité, l'application doit être configurée avec :
-              </p>
-              <div className="text-amber-700 text-xs space-y-1">
-                <p>• Clés API Revolut Open Banking</p>
-                <p>• Certificats de transport valides</p>
-                <p>• Enregistrement auprès de Revolut</p>
-                <p>• Variables d'environnement configurées</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Setup instructions */}
-        <div className="max-w-2xl mx-auto bg-white rounded-xl p-6 border border-gray-200">
-          <div className="flex items-start space-x-4">
-            <div className="p-3 bg-gray-100 rounded-lg">
-              <Shield className="h-6 w-6 text-gray-600" />
-            </div>
-            <div>
-              <h4 className="font-semibold text-gray-900 mb-2">Configuration développeur</h4>
-              <p className="text-gray-600 text-sm leading-relaxed mb-3">
-                Pour activer cette fonctionnalité, créez un fichier <code className="bg-gray-100 px-1 rounded">.env.local</code> avec :
-              </p>
-              <div className="bg-gray-50 p-3 rounded-lg text-xs font-mono text-gray-700 space-y-1">
-                <p>REVOLUT_CLIENT_ID=votre_client_id</p>
-                <p>REVOLUT_CLIENT_SECRET=votre_client_secret</p>
-                <p>REVOLUT_ENVIRONMENT=sandbox</p>
-                <p>NEXTAUTH_URL=http://localhost:3000</p>
-              </div>
-              <p className="text-gray-500 text-xs mt-2">
-                Consultez la documentation Revolut Developer pour obtenir vos clés API.
-              </p>
-            </div>
-          </div>
-        </div>
-      </main>
+      {/* Support Section */}
+      <div className="mt-8 text-center">
+        <p className="text-gray-500 text-sm">
+          Votre banque n'est pas listée ? {' '}
+          <span className="text-blue-600 font-medium">
+            Nous supportons plus de 2,500 banques européennes
+          </span>
+          {' '} via l'Open Banking.
+        </p>
+        <p className="text-gray-400 text-xs mt-2">
+          Propulsé par GoCardless Bank Account Data API
+        </p>
+      </div>
     </div>
   )
 } 
