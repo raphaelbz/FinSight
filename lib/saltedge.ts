@@ -186,7 +186,8 @@ export class SaltEdgeClient {
     expiresAt: string
   ): string {
     if (!this.config.privateKey) {
-      throw new Error('Private key is required for signed requests');
+      console.warn('⚠️ Private key not configured - skipping signature for pending mode');
+      return '';
     }
 
     const stringToSign = `${expiresAt}|${method}|${url}|${body}`;
@@ -217,9 +218,12 @@ export class SaltEdgeClient {
       'Secret': this.config.secret,
     };
 
-    if (signed) {
+    if (signed && this.config.privateKey) {
       headers['Expires-at'] = expiresAt.toString();
-      headers['Signature'] = this.generateSignature(method, url, bodyString, expiresAt.toString());
+      const signature = this.generateSignature(method, url, bodyString, expiresAt.toString());
+      if (signature) {
+        headers['Signature'] = signature;
+      }
     }
 
     // Track API calls for test mode
@@ -293,7 +297,7 @@ export class SaltEdgeClient {
     return this.makeRequest('/customers', {
       method: 'POST',
       body,
-      signed: true
+      signed: false  // Signatures optionnelles en mode pending
     });
   }
 
@@ -327,14 +331,14 @@ export class SaltEdgeClient {
     return this.makeRequest('/connections/connect', {
       method: 'POST',
       body,
-      signed: true
+      signed: false  // Signatures optionnelles en mode pending
     });
   }
 
   // Get connection details
   async getConnection(connectionId: string, include?: string[]): Promise<SaltEdgeConnection> {
     const query = include ? `?include=${include.join(',')}` : '';
-    return this.makeRequest(`/connections/${connectionId}${query}`, { signed: true });
+    return this.makeRequest(`/connections/${connectionId}${query}`, { signed: false });
   }
 
   // Get customer connections
@@ -344,7 +348,7 @@ export class SaltEdgeClient {
 
   // Get accounts for a connection
   async getAccounts(connectionId: string): Promise<SaltEdgeAccount[]> {
-    return this.makeRequest(`/accounts?connection_id=${connectionId}`, { signed: true });
+    return this.makeRequest(`/accounts?connection_id=${connectionId}`, { signed: false });
   }
 
   // Get account details
@@ -373,7 +377,7 @@ export class SaltEdgeClient {
       }
     });
 
-    return this.makeRequest(`/transactions?${params.toString()}`, { signed: true });
+    return this.makeRequest(`/transactions?${params.toString()}`, { signed: false });
   }
 
   // Get all transactions for a connection
@@ -501,14 +505,29 @@ export function createSaltEdgeClient(config?: Partial<SaltEdgeConfig>): SaltEdge
   const saltEdgeConfig: SaltEdgeConfig = {
     appId: process.env.SALTEDGE_APP_ID || '',
     secret: process.env.SALTEDGE_SECRET || '',
-    baseUrl: process.env.SALTEDGE_BASE_URL || 'https://www.saltedge.com/api/v6',
+    baseUrl: process.env.SALTEDGE_BASE_URL || 'https://www.saltedge.com/api/v5',
     publicKey: process.env.SALTEDGE_PUBLIC_KEY,
     privateKey: process.env.SALTEDGE_PRIVATE_KEY,
     ...config
   };
 
+  // Debug logs pour la configuration
+  console.log('🔧 Salt Edge Configuration:', {
+    appId: saltEdgeConfig.appId ? `${saltEdgeConfig.appId.substring(0, 10)}...` : 'MISSING',
+    secret: saltEdgeConfig.secret ? `${saltEdgeConfig.secret.substring(0, 10)}...` : 'MISSING',
+    baseUrl: saltEdgeConfig.baseUrl,
+    hasPrivateKey: !!saltEdgeConfig.privateKey,
+    mode: saltEdgeConfig.privateKey ? 'production' : 'pending'
+  });
+
   if (!saltEdgeConfig.appId || !saltEdgeConfig.secret) {
-    throw new Error('SALTEDGE_APP_ID and SALTEDGE_SECRET environment variables are required');
+    const error = 'SALTEDGE_APP_ID and SALTEDGE_SECRET environment variables are required';
+    console.error('❌ Salt Edge Configuration Error:', error);
+    throw new Error(error);
+  }
+
+  if (!saltEdgeConfig.privateKey) {
+    console.warn('⚠️ Salt Edge running in pending mode (no private key) - signatures disabled');
   }
 
   return new SaltEdgeClient(saltEdgeConfig);
