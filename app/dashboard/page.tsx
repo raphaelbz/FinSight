@@ -53,6 +53,15 @@ interface BankingData {
   }
 }
 
+// Banques recommandées pour les tests en mode pending
+const RECOMMENDED_TEST_BANKS = [
+  { code: 'fake_oauth_client_xf', name: 'Fake OAuth Bank (Test)', category: 'test', safe: true },
+  { code: 'fake_client_xf', name: 'Fake Web Bank (Test)', category: 'test', safe: true },
+  { code: 'credit_agricole_particuliers_fr', name: 'Crédit Agricole', category: 'french', safe: false },
+  { code: 'bnp_paribas_particuliers_fr', name: 'BNP Paribas', category: 'french', safe: false },
+  { code: 'revolut_gb', name: 'Revolut', category: 'neobank', safe: false },
+];
+
 function DashboardContent() {
   const { data: session, status } = useSession()
   const router = useRouter()
@@ -61,6 +70,10 @@ function DashboardContent() {
   const [bankingData, setBankingData] = useState<BankingData | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [testMode, setTestMode] = useState(true) // Mode test Salt Edge pending
+  const [testsUsed, setTestsUsed] = useState(0)
+  const [maxTests] = useState(10)
+  const [testHistory, setTestHistory] = useState<any[]>([])
 
   // Check URL parameters for status messages
   useEffect(() => {
@@ -80,6 +93,28 @@ function DashboardContent() {
       setTimeout(() => setStatusMessage(null), 10000)
     }
   }, [searchParams, router])
+
+  // Load test status from API
+  useEffect(() => {
+    const fetchTestStatus = async () => {
+      try {
+        const response = await fetch('/api/saltedge/test-status')
+        if (response.ok) {
+          const result = await response.json()
+          if (result.success) {
+            setTestsUsed(result.data.usedTests)
+            setTestHistory(result.data.testHistory || [])
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching test status:', error)
+      }
+    }
+
+    if (session && testMode) {
+      fetchTestStatus()
+    }
+  }, [session, testMode])
 
   // Load banking data from Salt Edge API
   useEffect(() => {
@@ -140,6 +175,7 @@ function DashboardContent() {
           type: 'info',
           message: 'Compte bancaire déconnecté avec succès'
         })
+        // Note: La déconnexion ne compte pas comme un test API
       }
     } catch (error) {
       console.error('Error disconnecting bank:', error)
@@ -170,6 +206,7 @@ function DashboardContent() {
         const result = await response.json()
         if (result.success && result.data.connect_url) {
           window.open(result.data.connect_url, '_blank')
+          // Le refresh est tracké automatiquement par l'API Salt Edge
         }
       } else {
         setStatusMessage({
@@ -187,6 +224,58 @@ function DashboardContent() {
       setRefreshing(false)
     }
   }
+
+  const handleTestBank = async (bankCode: string) => {
+    if (testsUsed >= maxTests) {
+      setStatusMessage({
+        type: 'error',
+        message: 'Limite de tests atteinte (10/10)'
+      });
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/saltedge/auth', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          provider_code: bankCode
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success && result.data.connect_url) {
+          window.open(result.data.connect_url, '_blank');
+          
+          // Mettre à jour le statut depuis la réponse API
+          if (result.data.test_status) {
+            setTestsUsed(result.data.test_status.usedTests);
+            setTestHistory(result.data.test_status.testHistory || []);
+          }
+          
+          setStatusMessage({
+            type: 'info',
+            message: `Test ${result.data.test_status?.usedTests || testsUsed + 1}/${maxTests} - Connexion à ${RECOMMENDED_TEST_BANKS.find(b => b.code === bankCode)?.name}`
+          });
+        }
+      } else {
+        const errorResult = await response.json();
+        setStatusMessage({
+          type: 'error',
+          message: errorResult.error || 'Erreur lors du lancement du test'
+        });
+      }
+    } catch (error) {
+      console.error('Error testing bank:', error);
+      setStatusMessage({
+        type: 'error',
+        message: 'Erreur lors du test de connexion'
+      });
+    }
+  };
 
   if (status === "loading" || loading) {
     return (
@@ -230,33 +319,28 @@ function DashboardContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            {/* Logo */}
-            <div className="flex items-center space-x-3">
-              <div className="flex items-center justify-center w-8 h-8 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg">
-                <TrendingUp className="h-5 w-5 text-white" />
-              </div>
-              <h1 className="text-xl font-bold text-gray-900">FinSight</h1>
-            </div>
-
-            {/* User menu */}
+      <header className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm border-b border-slate-200 dark:border-slate-700 sticky top-0 z-50">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-2">
-                <User className="h-5 w-5 text-gray-400" />
-                <span className="text-sm text-gray-700">
-                  {session?.user?.email || "Utilisateur"}
-                </span>
+                <BarChart3 className="h-8 w-8 text-blue-600" />
+                <h1 className="text-2xl font-bold text-slate-900 dark:text-white">FinSight</h1>
               </div>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={handleLogout}
-                className="text-gray-600 hover:text-gray-900"
-              >
+              {testMode && (
+                <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
+                  Mode Test: {testsUsed}/{maxTests} utilisés
+                </Badge>
+              )}
+            </div>
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2 text-sm text-slate-600 dark:text-slate-300">
+                <User className="h-4 w-4" />
+                <span>{session?.user?.name || session?.user?.email}</span>
+              </div>
+              <Button variant="outline" size="sm" onClick={handleLogout}>
                 <LogOut className="h-4 w-4 mr-2" />
                 Déconnexion
               </Button>
@@ -265,50 +349,134 @@ function DashboardContent() {
         </div>
       </header>
 
-      {/* Main content */}
-      <main className="max-w-7xl mx-auto px-6 lg:px-8 py-8">
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Tableau de bord</h2>
-          <p className="text-gray-600">Gérez vos finances avec {bankingData ? 'Salt Edge API' : 'FinSight'}</p>
-        </div>
-
-        {/* Status messages */}
+      <div className="container mx-auto px-4 py-8">
+        {/* Status Message */}
         {statusMessage && (
-          <div className={`mb-6 border rounded-lg p-4 ${
-            statusMessage.type === 'success' ? 'bg-green-50 border-green-200' :
-            statusMessage.type === 'error' ? 'bg-red-50 border-red-200' :
-            statusMessage.type === 'warning' ? 'bg-yellow-50 border-yellow-200' :
-            'bg-blue-50 border-blue-200'
+          <Card className={`mb-6 p-4 border-l-4 ${
+            statusMessage.type === 'success' ? 'border-green-500 bg-green-50 dark:bg-green-900/20' :
+            statusMessage.type === 'error' ? 'border-red-500 bg-red-50 dark:bg-red-900/20' :
+            statusMessage.type === 'warning' ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20' :
+            'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
           }`}>
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-2">
               {statusMessage.type === 'success' && <CheckCircle className="h-5 w-5 text-green-600" />}
               {statusMessage.type === 'error' && <AlertCircle className="h-5 w-5 text-red-600" />}
               {statusMessage.type === 'warning' && <AlertCircle className="h-5 w-5 text-yellow-600" />}
               {statusMessage.type === 'info' && <AlertCircle className="h-5 w-5 text-blue-600" />}
-              <div>
-                <p className={`font-medium ${
-                  statusMessage.type === 'success' ? 'text-green-900' :
-                  statusMessage.type === 'error' ? 'text-red-900' :
-                  statusMessage.type === 'warning' ? 'text-yellow-900' :
-                  'text-blue-900'
-                }`}>
-                  {statusMessage.type === 'success' && 'Succès !'}
-                  {statusMessage.type === 'error' && 'Erreur'}
-                  {statusMessage.type === 'warning' && 'Attention'}
-                  {statusMessage.type === 'info' && 'Information'}
-                </p>
-                <p className={`text-sm ${
-                  statusMessage.type === 'success' ? 'text-green-700' :
-                  statusMessage.type === 'error' ? 'text-red-700' :
-                  statusMessage.type === 'warning' ? 'text-yellow-700' :
-                  'text-blue-700'
-                }`}>
-                  {statusMessage.message}
-                </p>
-              </div>
+              <p className={`font-medium ${
+                statusMessage.type === 'success' ? 'text-green-800 dark:text-green-200' :
+                statusMessage.type === 'error' ? 'text-red-800 dark:text-red-200' :
+                statusMessage.type === 'warning' ? 'text-yellow-800 dark:text-yellow-200' :
+                'text-blue-800 dark:text-blue-200'
+              }`}>
+                {statusMessage.message}
+              </p>
             </div>
-          </div>
+          </Card>
         )}
+
+        {/* Test Mode Section */}
+        {testMode && !bankingData && (
+          <Card className="mb-6 p-6 border-l-4 border-blue-500 bg-blue-50 dark:bg-blue-900/20">
+            <div className="mb-4">
+              <h3 className="text-lg font-semibold text-blue-800 dark:text-blue-200 mb-2">
+                Mode Test Salt Edge - {maxTests - testsUsed} tests restants
+              </h3>
+              <p className="text-blue-700 dark:text-blue-300 text-sm mb-4">
+                Vous êtes en statut "pending" avec {maxTests} tests disponibles. Voici les banques recommandées pour vos tests :
+              </p>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {RECOMMENDED_TEST_BANKS.map((bank) => (
+                <Card key={bank.code} className="p-4 hover:shadow-md transition-shadow">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="font-medium">{bank.name}</h4>
+                    <Badge variant={bank.safe ? "default" : "secondary"}>
+                      {bank.category === 'test' ? '🧪 Test' : 
+                       bank.category === 'french' ? '🇫🇷 FR' : 
+                       '💳 Neo'}
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    {bank.safe ? 'Banque de test - connexion garantie' : 'Banque réelle - nécessite identifiants'}
+                  </p>
+                  <Button 
+                    size="sm" 
+                    variant={bank.safe ? "default" : "outline"}
+                    className="w-full"
+                    onClick={() => handleTestBank(bank.code)}
+                    disabled={testsUsed >= maxTests}
+                  >
+                    {bank.safe ? 'Tester maintenant' : 'Connecter banque'}
+                  </Button>
+                </Card>
+              ))}
+            </div>
+
+                         <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
+               <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                 💡 <strong>Conseil :</strong> Commencez par les banques de test (🧪) pour valider le processus avant d'utiliser vos tests sur de vraies banques.
+               </p>
+             </div>
+
+                           {/* Historique des tests */}
+              {testHistory.length > 0 && (
+                <div className="mt-6">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="font-medium text-blue-800 dark:text-blue-200">
+                      📊 Historique des tests ({testHistory.length})
+                    </h4>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={async () => {
+                        try {
+                          const response = await fetch('/api/saltedge/test-status', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ action: 'reset' })
+                          });
+                          if (response.ok) {
+                            const result = await response.json();
+                            setTestsUsed(0);
+                            setTestHistory([]);
+                            setStatusMessage({
+                              type: 'info',
+                              message: 'Compteur de tests réinitialisé'
+                            });
+                          }
+                        } catch (error) {
+                          console.error('Error resetting tests:', error);
+                        }
+                      }}
+                      className="text-xs"
+                    >
+                      🔄 Reset
+                    </Button>
+                  </div>
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {testHistory.slice(-5).reverse().map((test, index) => (
+                      <div key={index} className="flex items-center justify-between p-2 bg-white dark:bg-slate-800 rounded text-sm">
+                        <div className="flex items-center space-x-2">
+                          <span className={test.success ? '✅' : '❌'}></span>
+                          <span className="font-medium">{test.action}</span>
+                          {test.provider && (
+                            <Badge variant="outline" className="text-xs">
+                              {test.provider}
+                            </Badge>
+                          )}
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(test.timestamp).toLocaleTimeString('fr-FR')}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+           </Card>
+         )}
 
         {/* Connected banks */}
         {bankingData && (
@@ -616,7 +784,7 @@ function DashboardContent() {
             </Card>
           </div>
         )}
-      </main>
+      </div>
     </div>
   )
 }

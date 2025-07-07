@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { saltEdgeClient } from '@/lib/saltedge';
+import { saltEdgeClient, recordTestUsage } from '@/lib/saltedge';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 
@@ -16,6 +16,9 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const { provider_code } = body;
+
+    // Log du test en cours
+    console.log(`🧪 Test Salt Edge - Provider: ${provider_code || 'auto-selection'}`);
 
     // Créer un identifiant unique pour le customer Salt Edge
     const customerIdentifier = `finsight_${session.user.email}`;
@@ -66,17 +69,25 @@ export async function POST(request: NextRequest) {
 
       const widgetSession = await saltEdgeClient.createConnectionSession(sessionData);
 
+      // Enregistrer l'utilisation d'un test
+      const testStatus = recordTestUsage('connection_attempt', provider_code, true);
+      console.log(`✅ Test enregistré - ${testStatus.usedTests}/${testStatus.totalTests} utilisés`);
+
       return NextResponse.json({
         success: true,
         data: {
           connect_url: widgetSession.connect_url,
           expires_at: widgetSession.expires_at,
-          customer_id: customer.id
+          customer_id: customer.id,
+          test_status: testStatus
         }
       });
 
     } catch (saltEdgeError: any) {
       console.error('Salt Edge API Error:', saltEdgeError);
+      
+      // Enregistrer l'échec du test
+      recordTestUsage('connection_failed', provider_code, false);
       
       // Gérer les erreurs spécifiques de Salt Edge
       if (saltEdgeError.message?.includes('Customer')) {

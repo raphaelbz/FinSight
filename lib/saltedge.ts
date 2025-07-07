@@ -3,6 +3,52 @@
 
 import { createHash, createSign } from 'crypto';
 
+// Test tracking for pending mode
+interface TestTracker {
+  totalTests: number;
+  usedTests: number;
+  testHistory: Array<{
+    timestamp: string;
+    action: string;
+    provider?: string;
+    success: boolean;
+  }>;
+}
+
+let testTracker: TestTracker = {
+  totalTests: 10,
+  usedTests: 0,
+  testHistory: []
+};
+
+export function getTestStatus() {
+  return {
+    ...testTracker,
+    remainingTests: testTracker.totalTests - testTracker.usedTests
+  };
+}
+
+export function recordTestUsage(action: string, provider?: string, success: boolean = true) {
+  if (testTracker.usedTests < testTracker.totalTests) {
+    testTracker.usedTests++;
+    testTracker.testHistory.push({
+      timestamp: new Date().toISOString(),
+      action,
+      provider,
+      success
+    });
+  }
+  return getTestStatus();
+}
+
+export function resetTestCounter() {
+  testTracker = {
+    totalTests: 10,
+    usedTests: 0,
+    testHistory: []
+  };
+}
+
 export interface SaltEdgeConfig {
   appId: string;
   secret: string;
@@ -151,7 +197,7 @@ export class SaltEdgeClient {
     return sign.sign(this.config.privateKey, 'base64');
   }
 
-  // Utility method to make authenticated API requests
+  // Utility method to make authenticated API requests with test tracking
   private async makeRequest<T>(
     endpoint: string,
     options: {
@@ -176,6 +222,9 @@ export class SaltEdgeClient {
       headers['Signature'] = this.generateSignature(method, url, bodyString, expiresAt.toString());
     }
 
+    // Track API calls for test mode
+    console.log(`🔄 Salt Edge API Call: ${method} ${endpoint}`);
+    
     const response = await fetch(url, {
       method,
       headers,
@@ -184,6 +233,7 @@ export class SaltEdgeClient {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => null);
+      console.error(`❌ Salt Edge API Error: ${response.status}`, errorData);
       throw new Error(
         errorData?.error_message || 
         `Salt Edge API error: ${response.status} ${response.statusText}`
@@ -191,6 +241,7 @@ export class SaltEdgeClient {
     }
 
     const data = await response.json();
+    console.log(`✅ Salt Edge API Success: ${method} ${endpoint}`);
     return data.data || data;
   }
 
