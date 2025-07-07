@@ -3,6 +3,8 @@ import { Inter, Poppins } from 'next/font/google'
 import './globals.css'
 import ScrollAnimations from '@/components/scroll-animations'
 import Providers from '@/components/providers/session-provider'
+import { ThemeProvider } from '@/components/providers/theme-provider'
+import { ThemeSwitch } from '@/components/ui/theme-switch'
 
 const inter = Inter({ subsets: ['latin'] })
 const poppins = Poppins({ 
@@ -48,10 +50,17 @@ export default function RootLayout({
   return (
     <html lang="fr">
       <body className={`${inter.className} ${poppins.variable}`}>
-        <Providers>
-          {children}
-          <ScrollAnimations />
-        </Providers>
+        <ThemeProvider>
+          <Providers>
+            {children}
+            <ScrollAnimations />
+            
+            {/* Theme switch fixed in top right */}
+            <div className="fixed top-6 right-6 z-[60]">
+              <ThemeSwitch />
+            </div>
+          </Providers>
+        </ThemeProvider>
       </body>
     </html>
   )

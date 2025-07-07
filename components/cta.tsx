@@ -1,6 +1,8 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
 
 export default function CTA() {
   return (
@@ -8,10 +10,10 @@ export default function CTA() {
       <div className="max-w-4xl mx-auto text-center text-white relative z-10">
         
         <div className="mb-8 scroll-fade-in">
-          <div className="inline-flex items-center px-6 py-3 bg-white/10 rounded-full mb-6">
+          <Badge variant="secondary" className="inline-flex items-center px-6 py-3 bg-white/10 hover:bg-white/20 text-blue-100 border-white/20 mb-6">
             <div className="w-3 h-3 bg-green-400 rounded-full mr-3 animate-pulse"></div>
-            <span className="text-blue-100 font-poppins text-sm">Plus de 150 nouveaux utilisateurs cette semaine</span>
-          </div>
+            <span className="font-medium">Plus de 150 nouveaux utilisateurs cette semaine</span>
+          </Badge>
         </div>
 
         <h2 className="text-5xl md:text-7xl font-bold font-poppins mb-8 leading-tight tracking-tight scroll-fade-in">
@@ -36,13 +38,20 @@ export default function CTA() {
         </div>
 
         <div className="text-center scroll-fade-in">
-          <p className="text-blue-200/80 text-sm font-poppins mb-4">
+          <Badge variant="destructive" className="mb-6 bg-red-500/20 hover:bg-red-500/30 text-red-200 border-red-400/30">
             Prix de lancement : 9€/mois au lieu de 29€ • Offre limitée
-          </p>
-          <div className="flex flex-col md:flex-row gap-6 md:gap-12 justify-center items-center text-blue-200/60 text-sm font-poppins">
-            <span>✓ Sécurité bancaire</span>
-            <span>✓ Support français 7j/7</span>
-            <span>✓ Données hébergées en France</span>
+          </Badge>
+          <Separator className="my-6 bg-white/20" />
+          <div className="flex flex-col md:flex-row gap-6 md:gap-12 justify-center items-center">
+            <Badge variant="outline" className="border-blue-200/30 text-blue-200 bg-transparent">
+              ✓ Sécurité bancaire
+            </Badge>
+            <Badge variant="outline" className="border-blue-200/30 text-blue-200 bg-transparent">
+              ✓ Support français 7j/7
+            </Badge>
+            <Badge variant="outline" className="border-blue-200/30 text-blue-200 bg-transparent">
+              ✓ Données hébergées en France
+            </Badge>
           </div>
         </div>
 

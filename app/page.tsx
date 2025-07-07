@@ -7,7 +7,7 @@ import ScrollAnimations from '@/components/scroll-animations'
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-white relative">
+    <div className="min-h-screen bg-background relative page-transition">
       <ScrollAnimations />
       <Header />
       <main className="relative z-10">

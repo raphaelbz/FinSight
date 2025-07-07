@@ -55,7 +55,7 @@ export default function LoginPage() {
     window.location.href = "/"
   }
   return (
-    <div className="min-h-screen bg-white relative overflow-hidden">
+    <div className="min-h-screen bg-background relative overflow-hidden">
 
       {/* Back to home button */}
       <div className="absolute top-6 left-6 z-50">
@@ -63,7 +63,7 @@ export default function LoginPage() {
           variant="ghost" 
           onClick={handleBackToHome}
           type="button"
-          className="flex items-center space-x-2 text-gray-700 hover:text-blue-600 hover:bg-gray-50 transition-colors duration-200 cursor-pointer border border-transparent hover:border-gray-200 rounded-lg px-3 py-2"
+          className="flex items-center space-x-2 text-muted-foreground hover:text-blue-600 hover:bg-muted transition-colors duration-200 cursor-pointer border border-transparent hover:border-border rounded-lg px-3 py-2"
         >
           <ArrowLeft className="h-4 w-4" />
           <span>Retour</span>
@@ -82,15 +82,15 @@ export default function LoginPage() {
               </div>
               <h1 className="text-2xl font-bold gradient-text-hero">FinSight</h1>
             </div>
-            <p className="text-gray-600 text-sm">Connectez-vous à votre tableau de bord</p>
+            <p className="text-muted-foreground text-sm">Connectez-vous à votre tableau de bord</p>
           </div>
 
           {/* Login card */}
-          <Card className="p-8 animate-fade-in-up border-gray-200 shadow-lg bg-white">
+          <Card className="p-8 animate-fade-in-up border-border shadow-lg bg-card">
             <div className="space-y-6">
               <div className="text-center">
-                <h2 className="text-xl font-semibold text-gray-900 mb-2">Se connecter</h2>
-                <p className="text-sm text-gray-600">Choisissez votre méthode de connexion</p>
+                <h2 className="text-xl font-semibold text-foreground mb-2">Se connecter</h2>
+                <p className="text-sm text-muted-foreground">Choisissez votre méthode de connexion</p>
               </div>
 
               {/* Google Sign In */}
@@ -113,10 +113,10 @@ export default function LoginPage() {
               {/* Divider */}
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-200"></div>
+                  <div className="w-full border-t border-border"></div>
                 </div>
                 <div className="relative flex justify-center text-sm">
-                  <span className="px-3 bg-white text-gray-500">ou</span>
+                  <span className="px-3 bg-background text-muted-foreground">ou</span>
                 </div>
               </div>
 
@@ -129,7 +129,7 @@ export default function LoginPage() {
                 )}
                 
                 <div className="space-y-2">
-                  <label htmlFor="email" className="text-sm font-medium text-gray-700">
+                  <label htmlFor="email" className="text-sm font-medium text-foreground">
                     Nom d'utilisateur
                   </label>
                   <div className="relative">
@@ -139,7 +139,7 @@ export default function LoginPage() {
                       type="text"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white"
+                      className="w-full pl-10 pr-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-background text-foreground"
                       placeholder="test"
                       required
                     />
@@ -147,7 +147,7 @@ export default function LoginPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <label htmlFor="password" className="text-sm font-medium text-gray-700">
+                  <label htmlFor="password" className="text-sm font-medium text-foreground">
                     Mot de passe
                   </label>
                   <div className="relative">
@@ -157,7 +157,7 @@ export default function LoginPage() {
                       type="password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white"
+                      className="w-full pl-10 pr-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-background text-foreground"
                       placeholder="test"
                       required
                     />
@@ -170,8 +170,8 @@ export default function LoginPage() {
 
                 <div className="flex items-center justify-between text-sm">
                   <label className="flex items-center">
-                    <input type="checkbox" className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                    <span className="ml-2 text-gray-600">Se souvenir de moi</span>
+                    <input type="checkbox" className="rounded border-border text-blue-600 focus:ring-blue-500" />
+                    <span className="ml-2 text-muted-foreground">Se souvenir de moi</span>
                   </label>
                   <a href="#" className="text-blue-600 hover:text-blue-700 transition-colors duration-200">
                     Mot de passe oublié ?
@@ -188,8 +188,8 @@ export default function LoginPage() {
               </form>
 
               {/* Sign up link */}
-              <div className="text-center pt-4 border-t border-gray-200">
-                <p className="text-sm text-gray-600">
+              <div className="text-center pt-4 border-t border-border">
+                <p className="text-sm text-muted-foreground">
                   Pas encore de compte ?{' '}
                   <a href="#" className="text-blue-600 hover:text-blue-700 font-medium transition-colors duration-200">
                     Créer un compte

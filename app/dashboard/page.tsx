@@ -3,90 +3,118 @@
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { TrendingUp, User, LogOut, BarChart3, DollarSign, TrendingDown, TrendingUp as TrendingUpIcon, CheckCircle, Plus, AlertCircle } from "lucide-react"
+import { TrendingUp, User, LogOut, BarChart3, DollarSign, TrendingDown, TrendingUp as TrendingUpIcon, CheckCircle, Plus, AlertCircle, RefreshCw } from "lucide-react"
 import Link from "next/link"
 import { useSession, signOut } from "next-auth/react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useState, Suspense } from "react"
+import { FRENCH_BANKS } from "@/lib/saltedge"
 
-interface RevolutData {
-  connected: boolean
-  accountName: string
+interface SaltEdgeAccount {
+  id: string
+  name: string
   balance: number
   currency: string
-  transactions: Array<{
-    id: string
-    description: string
-    amount: number
-    date: string
-    category: string
-  }>
-  connectedAt: string
+  type: string
+  iban?: string
+  accountNumber?: string
+}
+
+interface SaltEdgeTransaction {
+  id: string
+  date: string
+  description: string
+  amount: number
+  currency: string
+  type: 'credit' | 'debit'
+  category: string
+  balance?: number
+}
+
+interface SaltEdgeConnection {
+  id: string
+  provider_name: string
+  status: string
+  last_success_at: string
+  created_at: string
+}
+
+interface BankingData {
+  connection: SaltEdgeConnection
+  accounts: SaltEdgeAccount[]
+  transactions: SaltEdgeTransaction[]
+  transactions_summary?: {
+    total_count: number
+    displayed_count: number
+    date_range: {
+      from: string | null
+      to: string | null
+    }
+  }
 }
 
 function DashboardContent() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const [showSuccessMessage, setShowSuccessMessage] = useState(false)
-  const [showErrorMessage, setShowErrorMessage] = useState<string | null>(null)
-  const [revolutData, setRevolutData] = useState<RevolutData | null>(null)
+  const [statusMessage, setStatusMessage] = useState<{type: 'success' | 'error' | 'warning' | 'info', message: string} | null>(null)
+  const [bankingData, setBankingData] = useState<BankingData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
 
-  // Check if user just connected a bank or had an error
+  // Check URL parameters for status messages
   useEffect(() => {
-    const connected = searchParams.get('connected')
     const status = searchParams.get('status')
-    const error = searchParams.get('error')
+    const message = searchParams.get('message')
     
-    if (connected === 'revolut' && status === 'success') {
-      setShowSuccessMessage(true)
-      // Clear the URL parameters
-      router.replace('/dashboard')
-      // Hide success message after 5 seconds
-      setTimeout(() => setShowSuccessMessage(false), 5000)
-    }
-    
-    if (error) {
-      const errorMessages: { [key: string]: string } = {
-        'revolut_auth_failed': 'Échec de l\'authentification Revolut',
-        'missing_parameters': 'Paramètres manquants dans la réponse',
-        'invalid_state': 'État invalide - possible tentative de fraude',
-        'no_accounts': 'Aucun compte trouvé',
-        'api_failed': 'Erreur de l\'API Revolut',
-        'internal_error': 'Erreur interne du serveur'
-      }
+    if (status && message) {
+      setStatusMessage({
+        type: status as 'success' | 'error' | 'warning' | 'info',
+        message: decodeURIComponent(message)
+      })
       
-      setShowErrorMessage(errorMessages[error] || 'Erreur inconnue')
+      // Clear URL parameters
       router.replace('/dashboard')
-      setTimeout(() => setShowErrorMessage(null), 10000)
+      
+      // Hide message after 10 seconds
+      setTimeout(() => setStatusMessage(null), 10000)
     }
   }, [searchParams, router])
 
-  // Load Revolut data from API
+  // Load banking data from Salt Edge API
   useEffect(() => {
-    const fetchRevolutData = async () => {
+    const fetchBankingData = async () => {
+      setLoading(true)
       try {
-        const response = await fetch('/api/revolut/data')
-        const data = await response.json()
+        // First check if user has any connections
+        const response = await fetch('/api/saltedge/data?type=all')
         
-        if (response.ok && data.connected) {
-          setRevolutData(data)
+        if (response.ok) {
+          const result = await response.json()
+          if (result.success && result.data) {
+            setBankingData(result.data)
+          } else {
+            setBankingData(null)
+          }
+        } else if (response.status === 404) {
+          // No connections found
+          setBankingData(null)
         } else {
-          setRevolutData(null)
+          console.error('Error fetching banking data:', await response.text())
+          setBankingData(null)
         }
       } catch (error) {
-        console.error('Error fetching Revolut data:', error)
-        setRevolutData(null)
+        console.error('Error fetching banking data:', error)
+        setBankingData(null)
       } finally {
         setLoading(false)
       }
     }
 
     if (session) {
-      fetchRevolutData()
+      fetchBankingData()
     }
-  }, [session, showSuccessMessage]) // Re-fetch when user connects
+  }, [session])
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -98,26 +126,74 @@ function DashboardContent() {
     await signOut({ callbackUrl: "/" })
   }
 
-  const handleDisconnectRevolut = async () => {
+  const handleDisconnectBank = async () => {
+    if (!bankingData?.connection?.id) return
+    
     try {
-      const response = await fetch('/api/revolut/data', {
+      const response = await fetch(`/api/saltedge/data?connection_id=${bankingData.connection.id}`, {
         method: 'DELETE'
       })
       
       if (response.ok) {
-        setRevolutData(null)
+        setBankingData(null)
+        setStatusMessage({
+          type: 'info',
+          message: 'Compte bancaire déconnecté avec succès'
+        })
       }
     } catch (error) {
-      console.error('Error disconnecting Revolut:', error)
+      console.error('Error disconnecting bank:', error)
+      setStatusMessage({
+        type: 'error',
+        message: 'Erreur lors de la déconnexion'
+      })
+    }
+  }
+
+  const handleRefreshData = async () => {
+    if (!bankingData?.connection?.id) return
+    
+    setRefreshing(true)
+    try {
+      const response = await fetch('/api/saltedge/data', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          connection_id: bankingData.connection.id,
+          type: 'refresh'
+        })
+      })
+      
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success && result.data.connect_url) {
+          window.open(result.data.connect_url, '_blank')
+        }
+      } else {
+        setStatusMessage({
+          type: 'error',
+          message: 'Impossible d\'actualiser les données'
+        })
+      }
+    } catch (error) {
+      console.error('Error refreshing data:', error)
+      setStatusMessage({
+        type: 'error',
+        message: 'Erreur lors de l\'actualisation'
+      })
+    } finally {
+      setRefreshing(false)
     }
   }
 
   if (status === "loading" || loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Chargement...</p>
+          <p className="text-muted-foreground">Chargement...</p>
         </div>
       </div>
     )
@@ -127,21 +203,30 @@ function DashboardContent() {
     return null // Will redirect to login
   }
 
-  // Calculate stats from Revolut data
-  const stats = revolutData ? {
-    balance: revolutData.balance,
-    income: revolutData.transactions
-      .filter(t => t.amount > 0)
+  // Calculate stats from banking data
+  const stats = bankingData ? {
+    balance: bankingData.accounts.reduce((sum, account) => sum + account.balance, 0),
+    income: bankingData.transactions
+      .filter(t => t.type === 'credit')
       .reduce((sum, t) => sum + t.amount, 0),
-    expenses: Math.abs(revolutData.transactions
-      .filter(t => t.amount < 0)
-      .reduce((sum, t) => sum + t.amount, 0)),
-    savings: revolutData.balance * 0.3 // Mock savings calculation
+    expenses: bankingData.transactions
+      .filter(t => t.type === 'debit')
+      .reduce((sum, t) => sum + t.amount, 0),
+    savings: bankingData.accounts.reduce((sum, account) => sum + account.balance, 0) * 0.3 // Mock calculation
   } : {
     balance: 0,
     income: 0,
     expenses: 0,
     savings: 0
+  }
+
+  // Get bank icon for provider
+  const getBankIcon = (providerName: string) => {
+    const bank = FRENCH_BANKS.find(b => 
+      providerName.toLowerCase().includes(b.name.toLowerCase()) ||
+      b.name.toLowerCase().includes(providerName.toLowerCase())
+    )
+    return bank?.logo || '🏦'
   }
 
   return (
@@ -184,77 +269,125 @@ function DashboardContent() {
       <main className="max-w-7xl mx-auto px-6 lg:px-8 py-8">
         <div className="mb-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Tableau de bord</h2>
-          <p className="text-gray-600">Bienvenue sur votre dashboard FinSight</p>
+          <p className="text-gray-600">Gérez vos finances avec {bankingData ? 'Salt Edge API' : 'FinSight'}</p>
         </div>
 
-        {/* Success message */}
-        {showSuccessMessage && (
-          <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
+        {/* Status messages */}
+        {statusMessage && (
+          <div className={`mb-6 border rounded-lg p-4 ${
+            statusMessage.type === 'success' ? 'bg-green-50 border-green-200' :
+            statusMessage.type === 'error' ? 'bg-red-50 border-red-200' :
+            statusMessage.type === 'warning' ? 'bg-yellow-50 border-yellow-200' :
+            'bg-blue-50 border-blue-200'
+          }`}>
             <div className="flex items-center space-x-3">
-              <CheckCircle className="h-5 w-5 text-green-600" />
+              {statusMessage.type === 'success' && <CheckCircle className="h-5 w-5 text-green-600" />}
+              {statusMessage.type === 'error' && <AlertCircle className="h-5 w-5 text-red-600" />}
+              {statusMessage.type === 'warning' && <AlertCircle className="h-5 w-5 text-yellow-600" />}
+              {statusMessage.type === 'info' && <AlertCircle className="h-5 w-5 text-blue-600" />}
               <div>
-                <p className="font-medium text-green-900">Revolut connecté avec succès !</p>
-                <p className="text-sm text-green-700">
-                  Vos données financières Revolut sont maintenant synchronisées.
+                <p className={`font-medium ${
+                  statusMessage.type === 'success' ? 'text-green-900' :
+                  statusMessage.type === 'error' ? 'text-red-900' :
+                  statusMessage.type === 'warning' ? 'text-yellow-900' :
+                  'text-blue-900'
+                }`}>
+                  {statusMessage.type === 'success' && 'Succès !'}
+                  {statusMessage.type === 'error' && 'Erreur'}
+                  {statusMessage.type === 'warning' && 'Attention'}
+                  {statusMessage.type === 'info' && 'Information'}
+                </p>
+                <p className={`text-sm ${
+                  statusMessage.type === 'success' ? 'text-green-700' :
+                  statusMessage.type === 'error' ? 'text-red-700' :
+                  statusMessage.type === 'warning' ? 'text-yellow-700' :
+                  'text-blue-700'
+                }`}>
+                  {statusMessage.message}
                 </p>
               </div>
             </div>
           </div>
         )}
 
-        {/* Error message */}
-        {showErrorMessage && (
-          <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
-            <div className="flex items-center space-x-3">
-              <AlertCircle className="h-5 w-5 text-red-600" />
-              <div>
-                <p className="font-medium text-red-900">Erreur de connexion</p>
-                <p className="text-sm text-red-700">{showErrorMessage}</p>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Connected banks */}
-        {revolutData && (
+        {bankingData && (
           <div className="mb-8">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Comptes connectés</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Comptes connectés</h3>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleRefreshData}
+                disabled={refreshing}
+                className="flex items-center gap-2"
+              >
+                <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                {refreshing ? 'Actualisation...' : 'Actualiser'}
+              </Button>
+            </div>
             <Card className="p-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-4">
-                  <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center text-white text-xl">
-                    💳
+                  <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center text-white text-xl">
+                    {getBankIcon(bankingData.connection.provider_name)}
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <p className="font-medium text-gray-900">{revolutData.accountName}</p>
-                      <Badge variant="beta" className="text-xs">BETA</Badge>
+                      <p className="font-medium text-gray-900">{bankingData.connection.provider_name}</p>
+                      <Badge variant="secondary" className="text-xs">Salt Edge</Badge>
+                      <Badge variant={bankingData.connection.status === 'active' ? 'default' : 'secondary'} className="text-xs">
+                        {bankingData.connection.status}
+                      </Badge>
                     </div>
                     <p className="text-sm text-gray-600">
-                      Connecté le {new Date(revolutData.connectedAt).toLocaleDateString('fr-FR')}
+                      {bankingData.accounts.length} compte{bankingData.accounts.length > 1 ? 's' : ''} • 
+                      Connecté le {new Date(bankingData.connection.created_at).toLocaleDateString('fr-FR')}
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">
                   <div className="text-right">
                     <p className="font-semibold text-gray-900">
-                      {revolutData.balance.toLocaleString('fr-FR', { 
+                      {stats.balance.toLocaleString('fr-FR', { 
                         style: 'currency', 
-                        currency: revolutData.currency 
+                        currency: bankingData.accounts[0]?.currency || 'EUR'
                       })}
                     </p>
-                    <p className="text-sm text-gray-600">Solde actuel</p>
+                    <p className="text-sm text-gray-600">Solde total</p>
                   </div>
                   <Button 
                     variant="outline" 
                     size="sm" 
-                    onClick={handleDisconnectRevolut}
+                    onClick={handleDisconnectBank}
                     className="text-red-600 hover:text-red-700"
                   >
                     Déconnecter
                   </Button>
                 </div>
               </div>
+              
+              {/* Individual accounts */}
+              {bankingData.accounts.length > 1 && (
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {bankingData.accounts.map((account) => (
+                      <div key={account.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div>
+                          <p className="font-medium text-sm text-gray-900">{account.name}</p>
+                          <p className="text-xs text-gray-600">{account.type}</p>
+                        </div>
+                        <p className="font-semibold text-sm text-gray-900">
+                          {account.balance.toLocaleString('fr-FR', { 
+                            style: 'currency', 
+                            currency: account.currency 
+                          })}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </Card>
           </div>
         )}
@@ -268,8 +401,8 @@ function DashboardContent() {
                 <p className="text-2xl font-bold text-gray-900">
                   {stats.balance.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
                 </p>
-                {revolutData && (
-                  <p className="text-sm text-green-600 mt-1">Via API Revolut</p>
+                {bankingData && (
+                  <p className="text-sm text-green-600 mt-1">Via Salt Edge API</p>
                 )}
               </div>
               <div className="p-3 bg-blue-100 rounded-full">
@@ -285,8 +418,10 @@ function DashboardContent() {
                 <p className="text-2xl font-bold text-gray-900">
                   {stats.income.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
                 </p>
-                {revolutData && (
-                  <p className="text-sm text-green-600 mt-1">3 derniers mois</p>
+                {bankingData && (
+                  <p className="text-sm text-green-600 mt-1">
+                    {bankingData.transactions_summary?.displayed_count || 0} transactions
+                  </p>
                 )}
               </div>
               <div className="p-3 bg-green-100 rounded-full">
@@ -302,8 +437,10 @@ function DashboardContent() {
                 <p className="text-2xl font-bold text-gray-900">
                   {stats.expenses.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
                 </p>
-                {revolutData && (
-                  <p className="text-sm text-red-600 mt-1">3 derniers mois</p>
+                {bankingData && (
+                  <p className="text-sm text-red-600 mt-1">
+                    {bankingData.transactions.filter(t => t.type === 'debit').length} sorties
+                  </p>
                 )}
               </div>
               <div className="p-3 bg-red-100 rounded-full">
@@ -319,7 +456,7 @@ function DashboardContent() {
                 <p className="text-2xl font-bold text-gray-900">
                   {stats.savings.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
                 </p>
-                {revolutData && (
+                {bankingData && (
                   <p className="text-sm text-green-600 mt-1">Estimation</p>
                 )}
               </div>
@@ -331,56 +468,70 @@ function DashboardContent() {
         </div>
 
         {/* Content area */}
-        {!revolutData ? (
+        {!bankingData ? (
           /* Empty state */
           <Card className="p-12 text-center">
             <div className="max-w-md mx-auto">
               <div className="mb-6">
-                <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
-                  <BarChart3 className="h-8 w-8 text-gray-400" />
+                <div className="mx-auto w-16 h-16 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center">
+                  <div className="text-2xl">🇫🇷</div>
                 </div>
               </div>
               <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                Connectez votre compte Revolut
+                Connectez votre banque française
               </h3>
-              <p className="text-gray-600 mb-6">
-                Utilisez l'API Open Banking officielle de Revolut pour synchroniser automatiquement vos transactions.
+              <p className="text-gray-600 mb-4">
+                Connectez vos comptes bancaires français via Salt Edge API. 
+                Compatible avec toutes les principales banques françaises.
               </p>
+              <div className="mb-6">
+                <div className="flex flex-wrap justify-center gap-2 text-sm">
+                  {FRENCH_BANKS.slice(0, 6).map((bank) => (
+                    <span key={bank.code} className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 rounded-full">
+                      <span>{bank.logo}</span>
+                      <span className="text-gray-700">{bank.name}</span>
+                    </span>
+                  ))}
+                  <span className="inline-flex items-center px-2 py-1 text-gray-500">
+                    et {FRENCH_BANKS.length - 6}+ autres...
+                  </span>
+                </div>
+              </div>
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
                 <Button asChild className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800">
                   <Link href="/dashboard/add-account">
                     <Plus className="h-4 w-4 mr-2" />
-                    Connecter Revolut
+                    Connecter ma banque
                   </Link>
                 </Button>
               </div>
             </div>
           </Card>
         ) : (
-          /* Transactions */
+          /* Banking data display */
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {/* Recent transactions */}
             <Card className="p-6">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-lg font-semibold text-gray-900">Transactions récentes</h3>
                 <div className="flex items-center gap-2">
-                  <Badge variant="secondary">Revolut</Badge>
-                  <Badge variant="success" className="text-xs">API Réelle</Badge>
+                  <Badge variant="secondary">{bankingData.connection.provider_name}</Badge>
+                  <Badge variant="default" className="text-xs bg-green-100 text-green-800">API Réelle</Badge>
                 </div>
               </div>
               <div className="space-y-4">
-                {revolutData.transactions.slice(0, 5).map((transaction) => (
+                {bankingData.transactions.slice(0, 8).map((transaction) => (
                   <div key={transaction.id} className="flex items-center justify-between py-2">
                     <div className="flex items-center space-x-3">
                       <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                        transaction.amount > 0 ? 'bg-green-100' : 'bg-red-100'
+                        transaction.type === 'credit' ? 'bg-green-100' : 'bg-red-100'
                       }`}>
                         <TrendingUpIcon className={`h-5 w-5 ${
-                          transaction.amount > 0 ? 'text-green-600' : 'text-red-600 rotate-180'
+                          transaction.type === 'credit' ? 'text-green-600' : 'text-red-600 rotate-180'
                         }`} />
                       </div>
-                      <div>
-                        <p className="font-medium text-gray-900">{transaction.description}</p>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-gray-900 truncate">{transaction.description}</p>
                         <p className="text-sm text-gray-500">
                           {new Date(transaction.date).toLocaleDateString('fr-FR')} • {transaction.category}
                         </p>
@@ -388,17 +539,24 @@ function DashboardContent() {
                     </div>
                     <div className="text-right">
                       <p className={`font-semibold ${
-                        transaction.amount > 0 ? 'text-green-600' : 'text-red-600'
+                        transaction.type === 'credit' ? 'text-green-600' : 'text-red-600'
                       }`}>
-                        {transaction.amount > 0 ? '+' : ''}
+                        {transaction.type === 'credit' ? '+' : '-'}
                         {transaction.amount.toLocaleString('fr-FR', { 
                           style: 'currency', 
-                          currency: 'EUR' 
+                          currency: transaction.currency 
                         })}
                       </p>
                     </div>
                   </div>
                 ))}
+                {bankingData.transactions_summary && bankingData.transactions_summary.total_count > 8 && (
+                  <div className="text-center py-2">
+                    <p className="text-sm text-gray-500">
+                      {bankingData.transactions_summary.total_count - 8} transactions supplémentaires
+                    </p>
+                  </div>
+                )}
               </div>
             </Card>
 
@@ -409,8 +567,17 @@ function DashboardContent() {
                 <Button asChild className="w-full justify-start" variant="outline">
                   <Link href="/dashboard/add-account">
                     <Plus className="h-4 w-4 mr-2" />
-                    Ajouter un autre compte
+                    Ajouter une autre banque
                   </Link>
+                </Button>
+                <Button 
+                  className="w-full justify-start" 
+                  variant="outline"
+                  onClick={handleRefreshData}
+                  disabled={refreshing}
+                >
+                  <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+                  Actualiser les données
                 </Button>
                 <Button className="w-full justify-start" variant="outline" disabled>
                   <BarChart3 className="h-4 w-4 mr-2" />
@@ -420,6 +587,31 @@ function DashboardContent() {
                   <TrendingUp className="h-4 w-4 mr-2" />
                   Rapport mensuel (Bientôt)
                 </Button>
+              </div>
+              
+              {/* Connection info */}
+              <div className="mt-6 pt-6 border-t border-gray-200">
+                <h4 className="text-sm font-medium text-gray-900 mb-3">Informations de connexion</h4>
+                <div className="space-y-2 text-sm text-gray-600">
+                  <div className="flex justify-between">
+                    <span>Dernière sync :</span>
+                    <span>{new Date(bankingData.connection.last_success_at).toLocaleDateString('fr-FR')}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Statut :</span>
+                    <span className={bankingData.connection.status === 'active' ? 'text-green-600' : 'text-yellow-600'}>
+                      {bankingData.connection.status}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Comptes :</span>
+                    <span>{bankingData.accounts.length}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Transactions :</span>
+                    <span>{bankingData.transactions_summary?.total_count || bankingData.transactions.length}</span>
+                  </div>
+                </div>
               </div>
             </Card>
           </div>
