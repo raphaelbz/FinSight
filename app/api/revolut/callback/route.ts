@@ -2,12 +2,17 @@ import { NextRequest, NextResponse } from 'next/server'
 import { revolutAPI } from '@/lib/revolut'
 import { getServerSession } from 'next-auth'
 
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
+  const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000'
+  
   try {
     // Check if user is authenticated
     const session = await getServerSession()
     if (!session?.user?.email) {
-      return NextResponse.redirect('/login?error=unauthorized')
+      return NextResponse.redirect(`${baseUrl}/login?error=unauthorized`)
     }
 
     const { searchParams } = new URL(request.url)
@@ -18,18 +23,18 @@ export async function GET(request: NextRequest) {
     // Check for OAuth errors
     if (error) {
       console.error('Revolut OAuth error:', error)
-      return NextResponse.redirect('/dashboard?error=revolut_auth_failed')
+      return NextResponse.redirect(`${baseUrl}/dashboard?error=revolut_auth_failed`)
     }
 
     if (!code || !state) {
-      return NextResponse.redirect('/dashboard?error=missing_parameters')
+      return NextResponse.redirect(`${baseUrl}/dashboard?error=missing_parameters`)
     }
 
     // Verify state parameter
     const storedState = request.cookies.get('revolut_state')?.value
     if (!storedState || storedState !== state) {
       console.error('State mismatch:', { stored: storedState, received: state })
-      return NextResponse.redirect('/dashboard?error=invalid_state')
+      return NextResponse.redirect(`${baseUrl}/dashboard?error=invalid_state`)
     }
 
     try {
@@ -40,7 +45,7 @@ export async function GET(request: NextRequest) {
       const accounts = await revolutAPI.getAccounts(tokenResponse.access_token)
       
       if (accounts.length === 0) {
-        return NextResponse.redirect('/dashboard?error=no_accounts')
+        return NextResponse.redirect(`${baseUrl}/dashboard?error=no_accounts`)
       }
 
       // Get transactions for the first account
@@ -67,7 +72,7 @@ export async function GET(request: NextRequest) {
 
       // In production, store this data in your database associated with the user
       // For demo purposes, we'll pass minimal data via URL
-      const response = NextResponse.redirect('/dashboard?connected=revolut&status=success')
+      const response = NextResponse.redirect(`${baseUrl}/dashboard?connected=revolut&status=success`)
       
       // Clear the state cookies
       response.cookies.delete('revolut_state')
@@ -84,10 +89,10 @@ export async function GET(request: NextRequest) {
       return response
     } catch (apiError) {
       console.error('Revolut API error:', apiError)
-      return NextResponse.redirect('/dashboard?error=api_failed')
+      return NextResponse.redirect(`${baseUrl}/dashboard?error=api_failed`)
     }
   } catch (error) {
     console.error('Callback error:', error)
-    return NextResponse.redirect('/dashboard?error=internal_error')
+    return NextResponse.redirect(`${baseUrl}/dashboard?error=internal_error`)
   }
 } 

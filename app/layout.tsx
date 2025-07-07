@@ -37,6 +37,7 @@ export const metadata: Metadata = {
     index: true,
     follow: true,
   },
+  metadataBase: new URL(process.env.NEXTAUTH_URL || 'http://localhost:3000'),
 }
 
 export default function RootLayout({

@@ -3,6 +3,9 @@ import { revolutAPI } from '@/lib/revolut'
 import { getServerSession } from 'next-auth'
 import { v4 as uuidv4 } from 'uuid'
 
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
   try {
     // Check if user is authenticated
