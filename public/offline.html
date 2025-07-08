@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mode Hors Ligne - FinSight</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            text-align: center;
+        }
+
+        .offline-container {
+            max-width: 500px;
+            padding: 2rem;
+            animation: fadeIn 0.6s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .icon {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 2rem;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+        }
+
+        h1 {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            font-weight: 600;
+        }
+
+        p {
+            font-size: 1.1rem;
+            line-height: 1.6;
+            margin-bottom: 2rem;
+            opacity: 0.9;
+        }
+
+        .features {
+            text-align: left;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 2rem 0;
+            backdrop-filter: blur(10px);
+        }
+
+        .features h3 {
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+
+        .feature-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.8rem;
+            font-size: 0.95rem;
+        }
+
+        .feature-item::before {
+            content: "✓";
+            margin-right: 0.8rem;
+            color: #4ade80;
+            font-weight: bold;
+        }
+
+        .buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 0.8rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.2s ease;
+            font-weight: 500;
+        }
+
+        .btn-primary {
+            background: white;
+            color: #667eea;
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .status {
+            margin-top: 2rem;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            font-size: 0.9rem;
+        }
+
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        @media (max-width: 480px) {
+            .offline-container {
+                padding: 1rem;
+            }
+            
+            h1 {
+                font-size: 1.5rem;
+            }
+            
+            .buttons {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="offline-container">
+        <div class="icon pulse">
+            📱
+        </div>
+        
+        <h1>Mode Hors Ligne</h1>
+        
+        <p>
+            Vous êtes actuellement hors ligne, mais FinSight continue de fonctionner ! 
+            Vos données sont sécurisées et synchronisées localement.
+        </p>
+
+        <div class="features">
+            <h3>Fonctionnalités disponibles :</h3>
+            <div class="feature-item">Consultation des données mises en cache</div>
+            <div class="feature-item">Analyse des transactions récentes</div>
+            <div class="feature-item">Graphiques et insights déjà chargés</div>
+            <div class="feature-item">Paramètres et préférences</div>
+        </div>
+
+        <div class="buttons">
+            <button class="btn btn-primary" onclick="goHome()">
+                Retour à l'accueil
+            </button>
+            <button class="btn btn-secondary" onclick="retryConnection()">
+                Réessayer la connexion
+            </button>
+        </div>
+
+        <div class="status" id="status">
+            <span id="connection-status">🔍 Vérification de la connexion...</span>
+        </div>
+    </div>
+
+    <script>
+        // Vérification périodique de la connexion
+        function checkConnection() {
+            if (navigator.onLine) {
+                document.getElementById('connection-status').innerHTML = 
+                    '🟢 Connexion rétablie ! Redirection...';
+                setTimeout(() => {
+                    window.location.href = '/dashboard';
+                }, 1500);
+            } else {
+                document.getElementById('connection-status').innerHTML = 
+                    '🔴 Toujours hors ligne - Fonctionnalités limitées disponibles';
+            }
+        }
+
+        function retryConnection() {
+            document.getElementById('connection-status').innerHTML = 
+                '🔄 Tentative de reconnexion...';
+            
+            setTimeout(() => {
+                if (navigator.onLine) {
+                    window.location.reload();
+                } else {
+                    checkConnection();
+                }
+            }, 1000);
+        }
+
+        function goHome() {
+            window.location.href = '/';
+        }
+
+        // Écouter les changements de statut de connexion
+        window.addEventListener('online', checkConnection);
+        window.addEventListener('offline', checkConnection);
+
+        // Vérification initiale
+        checkConnection();
+        
+        // Vérification périodique (toutes les 30 secondes)
+        setInterval(checkConnection, 30000);
+
+        console.log('📱 FinSight Offline Mode activated');
+    </script>
+</body>
+</html> 

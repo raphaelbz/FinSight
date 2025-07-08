@@ -24,14 +24,17 @@
     "clsx": "^2.0.0",
     "lucide-react": "^0.292.0",
     "next": "14.0.3",
-    "next-auth": "^4.24.11",
+    "next-auth": "^4.24.5",
+    "next-themes": "^0.2.1",
     "react": "^18",
     "react-dom": "^18",
-    "react-hook-form": "^7.60.0",
-    "tailwind-merge": "^2.0.0",
+    "react-hook-form": "^7.48.2",
+    "tailwind-merge": "^2.2.0",
     "tailwindcss-animate": "^1.0.7",
     "uuid": "^11.1.0",
-    "zod": "^3.25.75"
+    "zod": "^3.25.75",
+    "@prisma/client": "^5.7.1",
+    "prisma": "^5.7.1"
   },
   "devDependencies": {
     "@types/node": "^20",

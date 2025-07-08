@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { saltEdgeClient } from '@/lib/saltedge';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { 
+  getUserBankingData, 
+  getSaltEdgeInfoByEmail, 
+  syncSaltEdgeData,
+  createSyncLog 
+} from '@/lib/saltedge-db';
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,78 +21,92 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const connectionId = searchParams.get('connection_id');
     const dataType = searchParams.get('type') || 'all'; // 'accounts', 'transactions', 'all'
 
-    if (!connectionId) {
-      return NextResponse.json(
-        { error: 'Connection ID is required' },
-        { status: 400 }
-      );
-    }
-
     try {
-      // Vérifier que la connexion existe et appartient à l'utilisateur
-      const connection = await saltEdgeClient.getConnection(connectionId);
+      // 1. Récupérer toutes les données bancaires de l'utilisateur depuis la base
+      const userData = await getUserBankingData(session.user.email);
 
-      if (connection.status !== 'active') {
+      if (!userData || !userData.saltEdge) {
         return NextResponse.json(
           { 
-            error: 'Connection is not active',
-            status: connection.status,
+            success: false,
+            error: 'No banking connection found',
+            message: 'Aucune connexion bancaire trouvée. Veuillez connecter votre banque.'
+          },
+          { status: 404 }
+        );
+      }
+
+      const { saltEdge, accounts } = userData;
+
+      // 2. Vérifier le statut de la connexion
+      if (saltEdge.status !== 'active' || !saltEdge.connectionId) {
+        return NextResponse.json(
+          { 
+            success: false,
+            error: 'Connection not active',
+            status: saltEdge.status,
             message: 'La connexion bancaire n\'est pas active. Veuillez la reconnecter.'
           },
           { status: 400 }
         );
       }
 
+      // 3. Construire la réponse basée sur le type demandé
       let result: any = {
         connection: {
-          id: connection.id,
-          provider_name: connection.provider_name,
-          status: connection.status,
-          last_success_at: connection.last_success_at,
-          created_at: connection.created_at
+          id: saltEdge.connectionId,
+          provider_name: saltEdge.providerName,
+          status: saltEdge.status,
+          last_sync_at: saltEdge.lastSyncAt,
+          created_at: saltEdge.createdAt
         }
       };
 
-      // Récupérer les comptes si demandé
+      // Inclure les comptes si demandé
       if (dataType === 'accounts' || dataType === 'all') {
-        try {
-          const accounts = await saltEdgeClient.getAccounts(connectionId);
-          result.accounts = accounts.map(account => 
-            saltEdgeClient.formatAccountForDisplay(account)
-          );
-        } catch (error) {
-          console.error('Error fetching accounts:', error);
-          result.accounts_error = 'Impossible de récupérer les comptes';
-        }
+        result.accounts = accounts.map((account: any) => ({
+          id: account.id,
+          name: account.name,
+          balance: account.balance,
+          currency: account.currency,
+          type: account.nature,
+          iban: account.iban,
+          accountNumber: account.accountNumber
+        }));
       }
 
-      // Récupérer les transactions si demandé
+      // Inclure les transactions si demandé
       if (dataType === 'transactions' || dataType === 'all') {
-        try {
-          const transactions = await saltEdgeClient.getConnectionTransactions(connectionId);
-          
-          // Limiter à 100 transactions les plus récentes pour éviter les timeouts
-          const limitedTransactions = transactions.slice(0, 100);
-          
-          result.transactions = limitedTransactions.map(transaction => 
-            saltEdgeClient.formatTransactionForDisplay(transaction)
-          );
-          
-          result.transactions_summary = {
-            total_count: transactions.length,
-            displayed_count: limitedTransactions.length,
-            date_range: {
-              from: transactions.length > 0 ? transactions[transactions.length - 1].made_on : null,
-              to: transactions.length > 0 ? transactions[0].made_on : null
-            }
-          };
-        } catch (error) {
-          console.error('Error fetching transactions:', error);
-          result.transactions_error = 'Impossible de récupérer les transactions';
-        }
+        // Récupérer toutes les transactions de tous les comptes
+        const allTransactions = accounts.flatMap((account: any) => 
+          account.transactions.map((transaction: any) => ({
+            id: transaction.id,
+            date: transaction.madeOn,
+            description: transaction.description,
+            amount: Math.abs(transaction.amount),
+            currency: transaction.currency,
+            type: transaction.amount >= 0 ? 'credit' : 'debit',
+            category: transaction.category,
+            balance: transaction.balance,
+            account_name: account.name
+          }))
+        );
+
+        // Trier par date (plus récentes en premier)
+        allTransactions.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+        result.transactions = allTransactions.slice(0, 100); // Limiter à 100 transactions
+        
+        result.transactions_summary = {
+          total_count: allTransactions.length,
+          displayed_count: result.transactions.length,
+          date_range: {
+            from: allTransactions.length > 0 ? allTransactions[allTransactions.length - 1].date : null,
+            to: allTransactions.length > 0 ? allTransactions[0].date : null
+          }
+        };
       }
 
       return NextResponse.json({
@@ -94,30 +114,14 @@ export async function GET(request: NextRequest) {
         data: result
       });
 
-    } catch (saltEdgeError: any) {
-      console.error('Salt Edge API Error:', saltEdgeError);
+    } catch (error: any) {
+      console.error('Error fetching user banking data:', error);
       
-      if (saltEdgeError.message?.includes('ConnectionNotFound')) {
-        return NextResponse.json(
-          { error: 'Connection not found or access denied' },
-          { status: 404 }
-        );
-      }
-
-      if (saltEdgeError.message?.includes('Expired')) {
-        return NextResponse.json(
-          { 
-            error: 'Connection expired',
-            message: 'La connexion a expiré. Veuillez vous reconnecter à votre banque.'
-          },
-          { status: 401 }
-        );
-      }
-
       return NextResponse.json(
         { 
-          error: 'Salt Edge API error',
-          details: saltEdgeError.message
+          success: false,
+          error: 'Database error',
+          details: error.message
         },
         { status: 500 }
       );
@@ -127,6 +131,7 @@ export async function GET(request: NextRequest) {
     console.error('Data retrieval error:', error);
     return NextResponse.json(
       { 
+        success: false,
         error: 'Internal server error',
         details: error.message
       },
@@ -137,6 +142,8 @@ export async function GET(request: NextRequest) {
 
 // POST endpoint pour déclencher une actualisation des données
 export async function POST(request: NextRequest) {
+  const startTime = Date.now();
+  
   try {
     // Vérifier l'authentification
     const session = await getServerSession(authOptions);
@@ -148,23 +155,57 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { connection_id, type = 'refresh' } = body;
+    const { type = 'refresh' } = body;
 
-    if (!connection_id) {
+    // Récupérer les informations Salt Edge de l'utilisateur
+    const saltEdgeInfo = await getSaltEdgeInfoByEmail(session.user.email);
+    if (!saltEdgeInfo || !saltEdgeInfo.connectionId) {
       return NextResponse.json(
-        { error: 'Connection ID is required' },
-        { status: 400 }
+        { 
+          success: false,
+          error: 'No active connection found' 
+        },
+        { status: 404 }
       );
     }
 
+    const connectionId = saltEdgeInfo.connectionId;
+
     try {
+      let result;
       const returnUrl = `${process.env.NEXTAUTH_URL}/api/saltedge/callback`;
 
-      let result;
+      if (type === 'sync') {
+        // Synchronisation manuelle des données
+        console.log(`🔄 Manual sync requested for connection ${connectionId}`);
+        
+        const syncResult = await syncSaltEdgeData(connectionId);
+        
+        const duration = Date.now() - startTime;
+        
+        await createSyncLog(
+          saltEdgeInfo.userId,
+          connectionId,
+          'manual_sync',
+          syncResult.errors.length === 0 ? 'success' : 'error',
+          `Manual sync: ${syncResult.accounts.length} accounts, ${syncResult.transactions.length} transactions`,
+          duration
+        );
 
-      if (type === 'refresh') {
-        // Actualiser les données existantes
-        result = await saltEdgeClient.refreshConnection(connection_id, {
+        return NextResponse.json({
+          success: true,
+          data: {
+            type: 'sync',
+            accounts: syncResult.accounts.length,
+            transactions: syncResult.transactions.length,
+            errors: syncResult.errors,
+            duration
+          }
+        });
+
+      } else if (type === 'refresh') {
+        // Actualiser les données existantes via Salt Edge
+        result = await saltEdgeClient.refreshConnection(connectionId, {
           attempt: {
             return_to: returnUrl,
             locale: 'fr',
@@ -175,9 +216,19 @@ export async function POST(request: NextRequest) {
             javascript_callback_type: 'post_message'
           }
         });
+
+        await createSyncLog(
+          saltEdgeInfo.userId,
+          connectionId,
+          'refresh_initiated',
+          'pending',
+          'Refresh connection initiated',
+          Date.now() - startTime
+        );
+
       } else if (type === 'reconnect') {
         // Reconnecter avec de nouveaux identifiants
-        result = await saltEdgeClient.reconnectConnection(connection_id, {
+        result = await saltEdgeClient.reconnectConnection(connectionId, {
           attempt: {
             return_to: returnUrl,
             locale: 'fr',
@@ -189,9 +240,22 @@ export async function POST(request: NextRequest) {
             javascript_callback_type: 'post_message'
           }
         });
+
+        await createSyncLog(
+          saltEdgeInfo.userId,
+          connectionId,
+          'reconnect_initiated',
+          'pending',
+          'Reconnect connection initiated',
+          Date.now() - startTime
+        );
+
       } else {
         return NextResponse.json(
-          { error: 'Invalid refresh type. Use "refresh" or "reconnect"' },
+          { 
+            success: false,
+            error: 'Invalid refresh type. Use "sync", "refresh" or "reconnect"' 
+          },
           { status: 400 }
         );
       }
@@ -199,8 +263,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         data: {
-          connect_url: result.connect_url,
-          expires_at: result.expires_at,
+          connect_url: result?.connect_url,
+          expires_at: result?.expires_at,
           type: type
         }
       });
@@ -208,9 +272,23 @@ export async function POST(request: NextRequest) {
     } catch (saltEdgeError: any) {
       console.error('Salt Edge refresh error:', saltEdgeError);
       
+      const duration = Date.now() - startTime;
+      
+      await createSyncLog(
+        saltEdgeInfo.userId,
+        connectionId,
+        `${type}_error`,
+        'error',
+        saltEdgeError.message,
+        duration
+      );
+      
       if (saltEdgeError.message?.includes('ConnectionNotFound')) {
         return NextResponse.json(
-          { error: 'Connection not found' },
+          { 
+            success: false,
+            error: 'Connection not found' 
+          },
           { status: 404 }
         );
       }
@@ -218,6 +296,7 @@ export async function POST(request: NextRequest) {
       if (saltEdgeError.message?.includes('CannotBeRefreshed')) {
         return NextResponse.json(
           { 
+            success: false,
             error: 'Connection cannot be refreshed',
             message: 'Cette connexion ne peut pas être actualisée pour le moment.'
           },
@@ -227,6 +306,7 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json(
         { 
+          success: false,
           error: 'Refresh failed',
           details: saltEdgeError.message
         },
@@ -238,6 +318,85 @@ export async function POST(request: NextRequest) {
     console.error('Refresh error:', error);
     return NextResponse.json(
       { 
+        success: false,
+        error: 'Internal server error',
+        details: error.message
+      },
+      { status: 500 }
+    );
+  }
+} 
+
+// DELETE endpoint pour supprimer / déconnecter une connexion Salt Edge
+export async function DELETE(request: NextRequest) {
+  try {
+    // Vérifier l'authentification
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
+      return NextResponse.json(
+        { error: 'User not authenticated' },
+        { status: 401 }
+      );
+    }
+
+    // Récupérer les informations Salt Edge de l'utilisateur
+    const saltEdgeInfo = await getSaltEdgeInfoByEmail(session.user.email);
+    if (!saltEdgeInfo || !saltEdgeInfo.connectionId) {
+      return NextResponse.json(
+        { 
+          success: false,
+          error: 'No active connection found' 
+        },
+        { status: 404 }
+      );
+    }
+
+    const connectionId = saltEdgeInfo.connectionId;
+
+    try {
+      // Supprimer la connexion côté Salt Edge
+      await saltEdgeClient.deleteConnection(connectionId);
+
+      // Supprimer toutes les données de l'utilisateur
+      const { deleteUserData } = await import('@/lib/saltedge-db');
+      await deleteUserData(session.user.email);
+
+      console.log(`🗑️ Connection ${connectionId} deleted for user ${session.user.email}`);
+
+      return NextResponse.json({
+        success: true,
+        message: 'Connexion supprimée avec succès'
+      });
+
+    } catch (saltEdgeError: any) {
+      console.error('Salt Edge delete error:', saltEdgeError);
+      
+      // Même si Salt Edge échoue, on supprime les données locales
+      if (saltEdgeError.message?.includes('ConnectionNotFound')) {
+        const { deleteUserData } = await import('@/lib/saltedge-db');
+        await deleteUserData(session.user.email);
+        
+        return NextResponse.json({
+          success: true,
+          message: 'Connexion supprimée localement (déjà supprimée côté Salt Edge)'
+        });
+      }
+
+      return NextResponse.json(
+        { 
+          success: false,
+          error: 'Delete failed',
+          details: saltEdgeError.message
+        },
+        { status: 500 }
+      );
+    }
+
+  } catch (error: any) {
+    console.error('Delete error:', error);
+    return NextResponse.json(
+      { 
+        success: false,
         error: 'Internal server error',
         details: error.message
       },

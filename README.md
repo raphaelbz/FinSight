@@ -1,216 +1,283 @@
-# FinSight 🇫🇷
+# FinSight - Financial Dashboard with Salt Edge v6
 
-Une application de gestion financière intelligente propulsée par l'IA, spécialement conçue pour les banques françaises.
+Un tableau de bord financier moderne intégrant l'API Salt Edge v6 pour la synchronisation bancaire française.
 
-## ✨ Fonctionnalités
+## 🚀 Fonctionnalités
 
-- 🏦 **Connexion multi-banques** - Plus de 2,500 banques européennes supportées
-- 🇫🇷 **Banques françaises** - Revolut, BNP Paribas, Crédit Agricole, Société Générale...
-- 📊 **Score financier intelligent** - Analyse automatique de vos finances
-- 🤖 **Conseils IA personnalisés** - Recommandations adaptées à votre profil
-- 💬 **Assistant financier 24/7** - Chat IA pour vos questions financières
-- 📈 **Analyse des dépenses** - Catégorisation et suivi automatique
-- 🔮 **Projections financières** - Prédictions basées sur vos habitudes
-- 🔒 **Sécurité PSD2** - Connexion bancaire certifiée européenne
+- **Connexion bancaire sécurisée** via Salt Edge API v6
+- **Synchronisation automatique** des comptes et transactions
+- **Support complet des banques françaises** (BNP Paribas, Crédit Agricole, Société Générale, etc.)
+- **Tableaux de bord en temps réel** avec métriques financières
+- **Authentification Google** avec NextAuth.js
+- **Base de données persistante** avec Prisma et PostgreSQL
+- **Webhooks Salt Edge** pour la synchronisation en temps réel
+- **Interface moderne** avec Tailwind CSS et shadcn/ui
 
-## 🏦 Banques supportées
+## 🏗️ Architecture
 
-### 🇫🇷 Principales banques françaises
-- 🟣 **Revolut** - Banque numérique leader
-- 🏦 **BNP Paribas** - Leader bancaire français
-- 🌾 **Crédit Agricole** - Banque mutualiste
-- 🔴 **Société Générale** - Banque internationale
-- 📮 **La Banque Postale** - Service public
-- 💰 **Boursorama** - Banque en ligne
-- 💼 **LCL** - Le Crédit Lyonnais
-- 🧡 **ING Direct** - Banque digitale
-- 👋 **Hello Bank!** - Banque mobile
-- 🤝 **Crédit Mutuel** - Banque coopérative
+```
+FinSight/
+├── app/                    # Next.js App Router
+│   ├── api/               
+│   │   └── saltedge/      # API Salt Edge v6
+│   │       ├── auth/      # Authentification bancaire
+│   │       ├── callback/  # Webhooks & redirections
+│   │       └── data/      # Gestion des données
+│   ├── dashboard/         # Interface utilisateur
+│   └── login/             # Authentification
+├── lib/                   # Utilities
+│   ├── saltedge.ts        # Client Salt Edge v6
+│   ├── saltedge-db.ts     # Helpers Prisma
+│   ├── prisma.ts          # Configuration Prisma
+│   └── auth.ts            # Configuration NextAuth
+├── prisma/                # Schema base de données
+└── components/            # Composants UI
+```
 
-### 🌍 Et 2,490+ autres banques européennes
-Toutes les banques dans 50+ pays européens via **Salt Edge API**
+## 📋 Prérequis
 
-## 🚀 Démarrage rapide
+1. **Node.js 18+** et npm
+2. **PostgreSQL** (local ou cloud)
+3. **Compte Salt Edge** en mode Pending/Test
+4. **Projet Google Cloud** pour OAuth
+
+## 🛠️ Installation
+
+### 1. Cloner et installer
+
+```bash
+git clone https://github.com/votre-user/FinSight.git
+cd FinSight
+npm install
+```
+
+### 2. Configuration des variables d'environnement
+
+Copiez `env.example` vers `.env.local` :
+
+```bash
+cp env.example .env.local
+```
+
+Configurez les variables :
+
+```env
+# Next.js
+NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_SECRET=votre-secret-nextauth
+
+# Base de données
+DATABASE_URL="postgresql://user:password@localhost:5432/finsight"
+
+# Google OAuth
+GOOGLE_CLIENT_ID=votre-google-client-id
+GOOGLE_CLIENT_SECRET=votre-google-client-secret
+
+# Salt Edge API v6
+SALTEDGE_APP_ID=votre-saltedge-app-id
+SALTEDGE_SECRET=votre-saltedge-secret
+SALTEDGE_STATUS=pending
+SALTEDGE_BASE_URL=https://www.saltedge.com/api/v6
+```
+
+### 3. Configuration de la base de données
+
+```bash
+# Générer le client Prisma
+npx prisma generate
+
+# Créer et appliquer les migrations
+npx prisma migrate dev --name init
+
+# (Optionnel) Interface Prisma Studio
+npx prisma studio
+```
+
+### 4. Configuration Salt Edge
+
+1. **Créez un compte** sur [Salt Edge Dashboard](https://www.saltedge.com/dashboard)
+2. **Créez une application** et récupérez `APP_ID` et `SECRET`
+3. **Configurez les callbacks** :
+   - URL de callback : `https://votre-domaine.com/api/saltedge/callback`
+   - Type : AIS (Account Information Services)
+
+### 5. Configuration Google OAuth
+
+1. **Console Google Cloud** → Créer un projet
+2. **APIs & Services** → Identifiants → Créer OAuth 2.0
+3. **URIs de redirection autorisées** :
+   - `http://localhost:3000/api/auth/callback/google` (dev)
+   - `https://votre-domaine.com/api/auth/callback/google` (prod)
+
+## 🚀 Déploiement
 
 ### Développement local
 
 ```bash
-# Cloner le projet
-git clone https://github.com/your-username/finsight.git
-cd finsight
-
-# Installer les dépendances
-npm install
-
-# Configurer les variables d'environnement
-cp .env.example .env.local
-# Éditer .env.local avec vos clés Salt Edge
-
-# Lancer le serveur de développement
 npm run dev
 ```
 
-Ouvrez [http://localhost:3000](http://localhost:3000) dans votre navigateur.
+Accédez à [http://localhost:3000](http://localhost:3000)
 
-### Configuration Salt Edge
+### Production (Vercel)
 
-1. **Créer un compte** : [Salt Edge Dashboard](https://www.saltedge.com/dashboard)
-2. **Récupérer les clés API** (App-id et Secret)
-3. **Configurer .env.local** :
-
+1. **Push sur GitHub** :
 ```bash
-SALTEDGE_APP_ID=your_app_id_here
-SALTEDGE_SECRET=your_secret_here
-SALTEDGE_BASE_URL=https://www.saltedge.com/api/v6
-NEXTAUTH_URL=http://localhost:3000
+git add .
+git commit -m "feat: complete Salt Edge v6 integration"
+git push origin main
 ```
 
-Voir [SALTEDGE_SETUP.md](./SALTEDGE_SETUP.md) pour la configuration complète.
+2. **Déploiement Vercel** :
+   - Connectez votre repo GitHub
+   - Ajoutez toutes les variables d'environnement
+   - Configurez Vercel Postgres ou connectez votre DB externe
+   - Déployez
 
-## 🛠️ Technologies
-
-### Frontend
-- **Next.js 14** - Framework React full-stack
-- **TypeScript** - Typage statique
-- **Tailwind CSS** - Framework CSS utility-first
-- **Shadcn/UI** - Composants UI modernes
-- **Lucide React** - Icônes SVG
-
-### Backend & API
-- **Salt Edge API** - Connexion bancaire PSD2
-- **NextAuth.js** - Authentification
-- **Server Actions** - Actions côté serveur
-- **API Routes** - Endpoints REST
-
-### Déploiement
-- **Vercel** - Plateforme de déploiement
-- **Google OAuth** - Authentification sociale
-- **HTTPS** - Sécurité transport
-
-## 📁 Structure du projet
-
-```
-finsight/
-├── app/                      # App Router Next.js 14
-│   ├── api/saltedge/        # API Salt Edge
-│   ├── dashboard/           # Interface utilisateur
-│   └── login/               # Authentification
-├── lib/                     # Utilitaires
-│   ├── saltedge.ts         # Client Salt Edge
-│   └── auth.ts             # Configuration NextAuth
-├── components/             # Composants React
-└── docs/                   # Documentation
-```
-
-## 🔒 Sécurité
-
-- ✅ **PSD2 compliant** - Directive européenne
-- ✅ **Open Banking** - Standard sécurisé
-- ✅ **TLS 1.2+** - Chiffrement transport
-- ✅ **OAuth 2.0** - Authentification moderne
-- ✅ **RSA signatures** - Validation des requêtes
-- ✅ **Pas de stockage** des identifiants bancaires
-
-## 🚀 Déploiement
-
-### Vercel (Recommandé)
-
+3. **Post-déploiement** :
 ```bash
-# Installer Vercel CLI
-npm i -g vercel
+# Migration de la base de données
+npx prisma migrate deploy
 
-# Configurer les variables d'environnement
-vercel env add SALTEDGE_APP_ID
-vercel env add SALTEDGE_SECRET
-vercel env add NEXTAUTH_URL
-vercel env add NEXTAUTH_SECRET
-
-# Déployer
-vercel --prod
+# Génération du client Prisma
+npx prisma generate
 ```
 
-### Variables d'environnement production
+### Configuration des webhooks en production
 
-```bash
-SALTEDGE_APP_ID=your_production_app_id
-SALTEDGE_SECRET=your_production_secret
-SALTEDGE_BASE_URL=https://www.saltedge.com/api/v6
-NEXTAUTH_URL=https://your-domain.vercel.app
-NEXTAUTH_SECRET=your_nextauth_secret
-GOOGLE_CLIENT_ID=your_google_client_id
-GOOGLE_CLIENT_SECRET=your_google_client_secret
+Mettez à jour vos callbacks Salt Edge avec l'URL de production :
+- `https://votre-app.vercel.app/api/saltedge/callback`
+
+## 📚 Utilisation
+
+### 1. Connexion utilisateur
+- Authentification Google via NextAuth.js
+- Session persistante et sécurisée
+
+### 2. Connexion bancaire
+- Interface pour choisir sa banque française
+- Widget Salt Edge sécurisé
+- Support des banques de test (mode Pending)
+
+### 3. Synchronisation des données
+- **Automatique** : via webhooks Salt Edge
+- **Manuelle** : bouton "Synchroniser maintenant"
+- **Refresh** : renouvellement des tokens d'accès
+
+### 4. Visualisation
+- Dashboard avec métriques financières
+- Liste des comptes avec soldes
+- Historique des transactions
+- Catégorisation automatique
+
+## 🧪 Tests
+
+### Banques de test Salt Edge
+
+En mode Pending, utilisez ces providers de test :
+
+```javascript
+// Banques de test disponibles
+fake_oauth_client_xf        // OAuth avec transactions
+fake_client_xf              // Web form avec comptes multiples
+fakebank_semi_interactive_xf // Requiert SMS
 ```
 
-## 📊 Fonctionnalités avancées
+### Tests manuels
 
-### API Salt Edge
-- **Connexion temps réel** aux banques
-- **Synchronisation automatique** des transactions
-- **Support multi-comptes** par banque
-- **Catégorisation intelligente** des dépenses
-- **Actualisation on-demand** des données
+1. **Connexion** : Testez le flow complet
+2. **Webhooks** : Vérifiez les logs de synchronisation
+3. **Persistence** : Rechargez la page, données conservées
+4. **Déconnexion** : Suppression propre des données
 
-### Interface utilisateur
-- **Design responsive** - Mobile et desktop
-- **Mode sombre/clair** - Préférences utilisateur
-- **Notifications** - Alertes en temps réel
-- **Graphiques interactifs** - Visualisation des données
-- **Export de données** - PDF et CSV
+## 🔧 API Endpoints
 
-## 🔧 Développement
-
-### Scripts disponibles
-
-```bash
-npm run dev          # Serveur de développement
-npm run build        # Build de production
-npm run start        # Serveur de production
-npm run lint         # Linting ESLint
-npm run type-check   # Vérification TypeScript
+### Authentification bancaire
+```
+POST /api/saltedge/auth
+- Body: { provider_code?: string }
+- Response: { connect_url, expires_at }
 ```
 
-### API Endpoints
-
+### Récupération des données
 ```
-GET  /api/saltedge/auth          # Initier connexion bancaire
-POST /api/saltedge/auth          # Créer widget connection
-GET  /api/saltedge/callback      # Retour après auth
-POST /api/saltedge/callback      # Webhooks Salt Edge
-GET  /api/saltedge/data          # Récupérer données bancaires
-POST /api/saltedge/data          # Actualiser connexion
+GET /api/saltedge/data?type=all
+- Response: { accounts[], transactions[], connection }
 ```
 
-## 📚 Documentation
+### Synchronisation
+```
+POST /api/saltedge/data
+- Body: { type: 'sync' | 'refresh' | 'reconnect' }
+```
 
-- [Configuration Salt Edge](./SALTEDGE_SETUP.md) - Setup complet
-- [Salt Edge API Docs](https://docs.saltedge.com/v6/) - Documentation officielle
-- [Next.js Docs](https://nextjs.org/docs) - Framework documentation
+### Suppression
+```
+DELETE /api/saltedge/data
+- Response: { success: true }
+```
 
-## 🐛 Support & Contributions
+## 🔐 Sécurité
 
-### Signaler un bug
-- [GitHub Issues](https://github.com/your-username/finsight/issues)
-- Inclure les logs et étapes de reproduction
+- **Signatures Salt Edge** : Vérification automatique en mode Live
+- **Sessions chiffrées** : NextAuth.js avec JWT
+- **Variables d'environnement** : Secrets protégés
+- **HTTPS obligatoire** : Callbacks sécurisés
+- **Isolation utilisateur** : Données strictement séparées
 
-### Contribuer
-1. Fork le projet
-2. Créer une branche feature (`git checkout -b feature/AmazingFeature`)
-3. Commit vos changements (`git commit -m 'Add AmazingFeature'`)
-4. Push vers la branche (`git push origin feature/AmazingFeature`)
-5. Ouvrir une Pull Request
+## 📊 Base de données
 
-## 📄 Licence
+### Modèles Prisma
 
-Ce projet est sous licence MIT. Voir le fichier [LICENSE](LICENSE) pour plus de détails.
+```prisma
+model User {
+  id       String @id @default(cuid())
+  email    String @unique
+  saltEdge SaltEdgeInfo?
+  accounts Account[]
+}
 
-## 🙏 Remerciements
+model SaltEdgeInfo {
+  customerId   String  @unique
+  connectionId String? @unique
+  status       String  // pending, active, error
+  lastSyncAt   DateTime?
+}
 
-- **Salt Edge** - API bancaire européenne
-- **Vercel** - Plateforme de déploiement
-- **Shadcn** - Composants UI
-- **Lucide** - Icônes
-- **Next.js** - Framework React
+model Account {
+  id           String @id
+  name         String
+  balance      Float
+  currency     String
+  transactions Transaction[]
+}
+
+model Transaction {
+  id          String @id
+  description String
+  amount      Float
+  madeOn      DateTime
+  category    String
+}
+```
+
+## 🤝 Contribution
+
+1. Fork du projet
+2. Créer une branche feature
+3. Commit des changements
+4. Push et Pull Request
+
+## 📝 Licence
+
+MIT License - voir [LICENSE](LICENSE)
+
+## 🆘 Support
+
+- **Issues GitHub** : Rapportez les bugs
+- **Salt Edge Docs** : [https://docs.saltedge.com/v6/](https://docs.saltedge.com/v6/)
+- **NextAuth.js** : [https://next-auth.js.org/](https://next-auth.js.org/)
 
 ---
 
-**Développé avec ❤️ pour la communauté financière française** 
+**FinSight** - Votre tableau de bord financier personnel 🇫🇷 

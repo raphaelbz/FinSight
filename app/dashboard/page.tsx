@@ -165,17 +165,25 @@ function DashboardContent() {
     if (!bankingData?.connection?.id) return
     
     try {
-      const response = await fetch(`/api/saltedge/data?connection_id=${bankingData.connection.id}`, {
+      const response = await fetch('/api/saltedge/data', {
         method: 'DELETE'
       })
       
       if (response.ok) {
-        setBankingData(null)
+        const result = await response.json()
+        if (result.success) {
+          setBankingData(null)
+          setStatusMessage({
+            type: 'info',
+            message: result.message || 'Compte bancaire déconnecté avec succès'
+          })
+        }
+      } else {
+        const errorResult = await response.json()
         setStatusMessage({
-          type: 'info',
-          message: 'Compte bancaire déconnecté avec succès'
+          type: 'error',
+          message: errorResult.error || 'Erreur lors de la déconnexion'
         })
-        // Note: La déconnexion ne compte pas comme un test API
       }
     } catch (error) {
       console.error('Error disconnecting bank:', error)
@@ -197,7 +205,6 @@ function DashboardContent() {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          connection_id: bankingData.connection.id,
           type: 'refresh'
         })
       })
@@ -206,12 +213,23 @@ function DashboardContent() {
         const result = await response.json()
         if (result.success && result.data.connect_url) {
           window.open(result.data.connect_url, '_blank')
-          // Le refresh est tracké automatiquement par l'API Salt Edge
+          setStatusMessage({
+            type: 'info',
+            message: 'Actualisation lancée. Une nouvelle fenêtre s\'est ouverte.'
+          })
+        } else if (result.success) {
+          setStatusMessage({
+            type: 'success',
+            message: 'Actualisation terminée avec succès'
+          })
+          // Recharger les données
+          setTimeout(() => window.location.reload(), 1000)
         }
       } else {
+        const errorResult = await response.json()
         setStatusMessage({
           type: 'error',
-          message: 'Impossible d\'actualiser les données'
+          message: errorResult.error || 'Impossible d\'actualiser les données'
         })
       }
     } catch (error) {
@@ -219,6 +237,49 @@ function DashboardContent() {
       setStatusMessage({
         type: 'error',
         message: 'Erreur lors de l\'actualisation'
+      })
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  const handleSyncData = async () => {
+    if (!bankingData?.connection?.id) return
+    
+    setRefreshing(true)
+    try {
+      const response = await fetch('/api/saltedge/data', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          type: 'sync'
+        })
+      })
+      
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success) {
+          setStatusMessage({
+            type: 'success',
+            message: `Synchronisation réussie: ${result.data.accounts} comptes, ${result.data.transactions} transactions`
+          })
+          // Recharger les données du dashboard
+          setTimeout(() => window.location.reload(), 1000)
+        }
+      } else {
+        const errorResult = await response.json()
+        setStatusMessage({
+          type: 'error',
+          message: errorResult.error || 'Erreur lors de la synchronisation'
+        })
+      }
+    } catch (error) {
+      console.error('Error syncing data:', error)
+      setStatusMessage({
+        type: 'error',
+        message: 'Erreur lors de la synchronisation'
       })
     } finally {
       setRefreshing(false)
@@ -732,6 +793,19 @@ function DashboardContent() {
             <Card className="p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-6">Actions rapides</h3>
               <div className="space-y-3">
+                <Button 
+                  onClick={handleSyncData}
+                  disabled={refreshing}
+                  className="w-full justify-start" 
+                  variant="outline"
+                >
+                  {refreshing ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                  ) : (
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                  )}
+                  Synchroniser maintenant
+                </Button>
                 <Button asChild className="w-full justify-start" variant="outline">
                   <Link href="/dashboard/add-account">
                     <Plus className="h-4 w-4 mr-2" />

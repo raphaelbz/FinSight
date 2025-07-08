@@ -1,0 +1,103 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  saltEdge     SaltEdgeInfo?
+  accounts     Account[]
+  
+  @@map("users")
+}
+
+model SaltEdgeInfo {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  customerId   String   @unique // Salt Edge customer ID
+  connectionId String?  @unique // Salt Edge connection ID (rempli après succès)
+  providerName String?  // Nom de la banque connectée
+  status       String   @default("pending") // pending, active, inactive, error
+  lastSyncAt   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("salt_edge_info")
+}
+
+model Account {
+  id            String   @id // Salt Edge account ID
+  userId        String
+  connectionId  String?  // Salt Edge connection ID
+  name          String
+  nature        String   // checking, savings, credit_card, etc.
+  balance       Float
+  currency      String
+  iban          String?
+  accountNumber String?
+  sortCode      String?
+  swiftCode     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@map("accounts")
+}
+
+model Transaction {
+  id          String   @id // Salt Edge transaction ID
+  accountId   String
+  description String
+  amount      Float
+  currency    String
+  madeOn      DateTime // Date de la transaction
+  category    String
+  mode        String   @default("normal") // normal, fee, transfer
+  status      String   @default("posted") // posted, pending
+  duplicated  Boolean  @default(false)
+  
+  // Champs extra
+  balance     Float?   // Solde du compte après transaction
+  postingDate DateTime?
+  merchantId  String?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@map("transactions")
+}
+
+model SyncLog {
+  id           String   @id @default(cuid())
+  userId       String
+  connectionId String?
+  action       String   // connect, refresh, fetch_accounts, fetch_transactions
+  status       String   // success, error, pending
+  message      String?
+  duration     Int?     // Durée en ms
+  createdAt    DateTime @default(now())
+
+  @@map("sync_logs")
+} 

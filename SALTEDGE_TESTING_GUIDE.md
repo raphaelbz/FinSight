@@ -76,7 +76,7 @@
 ```bash
 SALTEDGE_APP_ID=your_app_id
 SALTEDGE_SECRET=your_secret
-SALTEDGE_BASE_URL=https://www.saltedge.com/api/v5
+SALTEDGE_BASE_URL=https://www.saltedge.com/api/v6
 SALTEDGE_STATUS=pending
 SALTEDGE_TESTS_REMAINING=10
 ```
